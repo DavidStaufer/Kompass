@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>de</string>
+	<key>CFBundleExecutable</key>
+	<string>Kompass</string>
+	<key>CFBundleIdentifier</key>
+	<string>de.staufer.kompass</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Kompass</string>
+	<key>CFBundleDisplayName</key>
+	<string>Kompass</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.education</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Kompass synchronisiert deine Vorlesungen, Lernblöcke, Klausuren und Abgaben mit Apple Kalender und plant deine Woche um deine bestehenden Termine herum.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Kompass synchronisiert deine Vorlesungen, Lernblöcke, Klausuren und Abgaben mit Apple Kalender und plant deine Woche um deine bestehenden Termine herum.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Kompass legt Erinnerungen für Klausuren, Abgaben und Präsentationen in der Erinnerungen-App an, damit du sie auch auf iPhone und Watch siehst.</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>Kompass legt Erinnerungen für Klausuren, Abgaben und Präsentationen in der Erinnerungen-App an, damit du sie auch auf iPhone und Watch siehst.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>de.staufer.kompass</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>kompass</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

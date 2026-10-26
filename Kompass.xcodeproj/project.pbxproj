@@ -1,0 +1,418 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		5AAB3E6E922B6328A3D90C48 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = EF42F2F86908197AE1497970 /* Assets.xcassets */; };
+		6F68E2171CFF7F5D9833C5B5 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9E5F28F16E2C7AAED8582773 /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		67EE503905E85B93A8890FAA /* Kompass.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Kompass.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9E5F28F16E2C7AAED8582773 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = iOS/Assets.xcassets; sourceTree = "<group>"; };
+		A87F62CB53D5009767F42EC4 /* Kompass.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Kompass.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		EF42F2F86908197AE1497970 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = macOS/Assets.xcassets; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		56BDD5DF2818249572CF400F /* Kompass */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			name = Kompass;
+			path = Sources/Kompass;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		8F945CA2C129C2C2A2BCA996 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DB0AE8B2E2C35ACC5F7B5960 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		1BADDC1D73C1A20F347483E1 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				67EE503905E85B93A8890FAA /* Kompass.app */,
+				A87F62CB53D5009767F42EC4 /* Kompass.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		6463ECBDA2FB79AD685349C0 /* Xcode */ = {
+			isa = PBXGroup;
+			children = (
+				9E5F28F16E2C7AAED8582773 /* Assets.xcassets */,
+				EF42F2F86908197AE1497970 /* Assets.xcassets */,
+			);
+			path = Xcode;
+			sourceTree = "<group>";
+		};
+		8D3FC6DB5D0827F168A73277 = {
+			isa = PBXGroup;
+			children = (
+				56BDD5DF2818249572CF400F /* Kompass */,
+				6463ECBDA2FB79AD685349C0 /* Xcode */,
+				1BADDC1D73C1A20F347483E1 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		8857B01D48E68B78A16501D4 /* Kompass macOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5FA46CADB5116D9C4E316A06 /* Build configuration list for PBXNativeTarget "Kompass macOS" */;
+			buildPhases = (
+				4C5CBF1061B73ABAEB31C8A1 /* Sources */,
+				DB0AE8B2E2C35ACC5F7B5960 /* Frameworks */,
+				A5E8826EA02118DE913C3706 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				56BDD5DF2818249572CF400F /* Kompass */,
+			);
+			name = "Kompass macOS";
+			packageProductDependencies = (
+			);
+			productName = Kompass;
+			productReference = A87F62CB53D5009767F42EC4 /* Kompass.app */;
+			productType = "com.apple.product-type.application";
+		};
+		AF4DD625E8AA25633A67D6D9 /* Kompass iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5D48126CE252F00A31403AA5 /* Build configuration list for PBXNativeTarget "Kompass iOS" */;
+			buildPhases = (
+				B1231F01F7B6BF2459AC6541 /* Sources */,
+				8F945CA2C129C2C2A2BCA996 /* Frameworks */,
+				04FAC48F058CD25DAADB9131 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				56BDD5DF2818249572CF400F /* Kompass */,
+			);
+			name = "Kompass iOS";
+			packageProductDependencies = (
+			);
+			productName = Kompass;
+			productReference = 67EE503905E85B93A8890FAA /* Kompass.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		46F86FAA6BBF9AC94A7E4595 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1620;
+				LastUpgradeCheck = 1620;
+				TargetAttributes = {
+					8857B01D48E68B78A16501D4 = {
+						CreatedOnToolsVersion = 16.2;
+					};
+					AF4DD625E8AA25633A67D6D9 = {
+						CreatedOnToolsVersion = 16.2;
+					};
+				};
+			};
+			buildConfigurationList = 71371EFA15DA3BB408E93DEB /* Build configuration list for PBXProject "Kompass" */;
+			developmentRegion = de;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				de,
+				Base,
+			);
+			mainGroup = 8D3FC6DB5D0827F168A73277;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 1BADDC1D73C1A20F347483E1 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				AF4DD625E8AA25633A67D6D9 /* Kompass iOS */,
+				8857B01D48E68B78A16501D4 /* Kompass macOS */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		04FAC48F058CD25DAADB9131 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6F68E2171CFF7F5D9833C5B5 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A5E8826EA02118DE913C3706 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5AAB3E6E922B6328A3D90C48 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		4C5CBF1061B73ABAEB31C8A1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B1231F01F7B6BF2459AC6541 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		879786BAEDB1AAB9CF1CEE6C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Xcode/macOS/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Kompass;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Kompass synchronisiert deine Vorlesungen, Lernblöcke, Klausuren und Abgaben mit Apple Kalender und plant deine Woche um deine bestehenden Termine herum.";
+				INFOPLIST_KEY_NSCalendarsUsageDescription = "Kompass synchronisiert deine Vorlesungen, Lernblöcke, Klausuren und Abgaben mit Apple Kalender und plant deine Woche um deine bestehenden Termine herum.";
+				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Kompass legt Erinnerungen für Klausuren, Abgaben und Präsentationen in der Erinnerungen-App an.";
+				INFOPLIST_KEY_NSRemindersUsageDescription = "Kompass legt Erinnerungen für Klausuren, Abgaben und Präsentationen in der Erinnerungen-App an.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.2;
+				PRODUCT_BUNDLE_IDENTIFIER = de.staufer.kompass;
+				PRODUCT_NAME = Kompass;
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		BD6069C3C0934E561A21BCB1 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = J35PMHY434;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Xcode/iOS/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Kompass;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Kompass synchronisiert deine Vorlesungen, Lernblöcke, Klausuren und Abgaben mit Apple Kalender und plant deine Woche um deine bestehenden Termine herum.";
+				INFOPLIST_KEY_NSCalendarsUsageDescription = "Kompass synchronisiert deine Vorlesungen, Lernblöcke, Klausuren und Abgaben mit Apple Kalender und plant deine Woche um deine bestehenden Termine herum.";
+				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Kompass legt Erinnerungen für Klausuren, Abgaben und Präsentationen in der Erinnerungen-App an.";
+				INFOPLIST_KEY_NSRemindersUsageDescription = "Kompass legt Erinnerungen für Klausuren, Abgaben und Präsentationen in der Erinnerungen-App an.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.2;
+				PRODUCT_BUNDLE_IDENTIFIER = de.staufer.kompass;
+				PRODUCT_NAME = Kompass;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		C68D4F0AA3EE307926006C81 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = J35PMHY434;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Xcode/iOS/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Kompass;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Kompass synchronisiert deine Vorlesungen, Lernblöcke, Klausuren und Abgaben mit Apple Kalender und plant deine Woche um deine bestehenden Termine herum.";
+				INFOPLIST_KEY_NSCalendarsUsageDescription = "Kompass synchronisiert deine Vorlesungen, Lernblöcke, Klausuren und Abgaben mit Apple Kalender und plant deine Woche um deine bestehenden Termine herum.";
+				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Kompass legt Erinnerungen für Klausuren, Abgaben und Präsentationen in der Erinnerungen-App an.";
+				INFOPLIST_KEY_NSRemindersUsageDescription = "Kompass legt Erinnerungen für Klausuren, Abgaben und Präsentationen in der Erinnerungen-App an.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.2;
+				PRODUCT_BUNDLE_IDENTIFIER = de.staufer.kompass;
+				PRODUCT_NAME = Kompass;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		F32F3356838B010091B25A45 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Xcode/macOS/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Kompass;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Kompass synchronisiert deine Vorlesungen, Lernblöcke, Klausuren und Abgaben mit Apple Kalender und plant deine Woche um deine bestehenden Termine herum.";
+				INFOPLIST_KEY_NSCalendarsUsageDescription = "Kompass synchronisiert deine Vorlesungen, Lernblöcke, Klausuren und Abgaben mit Apple Kalender und plant deine Woche um deine bestehenden Termine herum.";
+				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Kompass legt Erinnerungen für Klausuren, Abgaben und Präsentationen in der Erinnerungen-App an.";
+				INFOPLIST_KEY_NSRemindersUsageDescription = "Kompass legt Erinnerungen für Klausuren, Abgaben und Präsentationen in der Erinnerungen-App an.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.2;
+				PRODUCT_BUNDLE_IDENTIFIER = de.staufer.kompass;
+				PRODUCT_NAME = Kompass;
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		FA9139DD8B03E3F922556BF8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		FFE2104CCFAB79205AC64460 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		5D48126CE252F00A31403AA5 /* Build configuration list for PBXNativeTarget "Kompass iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C68D4F0AA3EE307926006C81 /* Debug */,
+				BD6069C3C0934E561A21BCB1 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5FA46CADB5116D9C4E316A06 /* Build configuration list for PBXNativeTarget "Kompass macOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				879786BAEDB1AAB9CF1CEE6C /* Debug */,
+				F32F3356838B010091B25A45 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		71371EFA15DA3BB408E93DEB /* Build configuration list for PBXProject "Kompass" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FA9139DD8B03E3F922556BF8 /* Debug */,
+				FFE2104CCFAB79205AC64460 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 46F86FAA6BBF9AC94A7E4595 /* Project object */;
+}
