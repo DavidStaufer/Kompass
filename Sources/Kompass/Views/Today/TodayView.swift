@@ -64,7 +64,8 @@ struct CalendarAccessCard: View {
     }
 
     private var icon: some View {
-        Image(systemName: "calendar.badge.exclamationmark").font(.system(size: 26)).foregroundStyle(.orange)
+        Image(systemName: "calendar.badge.exclamationmark").scaledFont(size: 26).foregroundStyle(.orange)
+            .accessibilityHidden(true)
     }
     private var text: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -110,14 +111,14 @@ struct WeekReviewBanner: View {
         let info = HStack(spacing: 14) {
             ProgressRing(value: r.completion, color: .accentColor, lineWidth: 6, size: 58, showLabel: true)
             VStack(alignment: .leading, spacing: 4) {
-                Text("Wochenrückblick KW \(ws.weekNumber)").font(.system(size: 16, weight: .semibold))
+                Text("Wochenrückblick KW \(ws.weekNumber)").scaledFont(size: 16, weight: .semibold)
                 Text("\(Fmt.hours(r.totalLogged)) von \(Fmt.hours(r.totalGoal)) gelernt · \(r.tasksDone.count) Aufgaben erledigt · \(r.deadlines.filter(\.done).count)/\(r.deadlines.count) Fristen")
                     .font(.callout).foregroundStyle(.secondary)
             }
         }
         let close = Button {
             withAnimation(Motion.standard) { store.prefs.lastReviewDismissedWeek = ws }
-        } label: { Image(systemName: "xmark").font(.system(size: 10, weight: .bold)) }
+        } label: { Label("Ausblenden", systemImage: "xmark").labelStyle(.iconOnly).scaledFont(size: 10, weight: .bold) }
             .buttonStyle(.borderless)
             .foregroundStyle(.secondary)
             .help("Für diese Woche ausblenden")
@@ -148,7 +149,6 @@ struct AgendaCard: View {
     @Environment(AppModel.self) private var app
     @Environment(DataStore.self) private var store
     @Environment(CalendarService.self) private var calendar
-    @Environment(FocusTimer.self) private var timer
 
     var body: some View {
         let now = Date()
@@ -166,7 +166,7 @@ struct AgendaCard: View {
             }
             if timed.isEmpty {
                 HStack {
-                    Image(systemName: "sun.haze").foregroundStyle(.secondary)
+                    Image(systemName: "sun.haze").foregroundStyle(.secondary).accessibilityHidden(true)
                     Text(calendar.eventsAuthorized ? "Keine Termine heute." : "Kalender nicht verbunden.").foregroundStyle(.secondary)
                 }
                 .padding(.vertical, 8)
@@ -196,14 +196,14 @@ struct AgendaRow: View {
         let color = event.moduleID.map { store.color(for: $0) } ?? event.calendarColor
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .trailing, spacing: 0) {
-                Text(Fmt.time(event.start)).font(.system(size: 12, weight: .semibold).monospacedDigit())
-                Text(Fmt.time(event.end)).font(.system(size: 11).monospacedDigit()).foregroundStyle(.secondary)
+                Text(Fmt.time(event.start)).scaledFont(size: 12, weight: .semibold).monospacedDigit()
+                Text(Fmt.time(event.end)).scaledFont(size: 11).monospacedDigit().foregroundStyle(.secondary)
             }
             .frame(width: 44, alignment: .trailing)
             RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 3)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(event.title).font(.system(size: 13, weight: .medium)).lineLimit(1)
+                    Text(event.title).scaledFont(size: 13, weight: .medium).lineLimit(1)
                     if isNow { Pill(text: "Jetzt", color: .red) }
                 }
                 Text([event.location.nilIfEmpty, event.calendarTitle].compactMap { $0 }.joined(separator: " · "))
@@ -235,12 +235,14 @@ struct TasksCard: View {
         let doneToday = store.tasks.filter { $0.done && ($0.doneAt?.isToday ?? false) }
         VStack(alignment: .leading, spacing: 10) {
             SectionLabel("Aufgaben", symbol: "checklist") {
-                Button { app.sheet = .task(nil, moduleID: nil) } label: { Image(systemName: "plus") }.buttonStyle(.borderless)
+                Button { app.sheet = .task(nil, moduleID: nil) } label: { Label("Neue Aufgabe", systemImage: "plus").labelStyle(.iconOnly) }
+                    .buttonStyle(.borderless)
+                    .help("Neue Aufgabe")
             }
             ForEach(open.prefix(10)) { t in TaskRow(task: t) }
             ForEach(doneToday) { t in TaskRow(task: t) }
             HStack {
-                Image(systemName: "plus.circle").foregroundStyle(.secondary)
+                Image(systemName: "plus.circle").foregroundStyle(.secondary).accessibilityHidden(true)
                 TextField("Neue Aufgabe – Enter zum Speichern", text: $newTitle)
                     .textFieldStyle(.plain)
                     .focused($focused)
@@ -272,8 +274,9 @@ struct TaskRow: View {
             Button {
                 withAnimation(Motion.momentum) { store.toggleTask(task.id) }
             } label: {
-                Image(systemName: task.done ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 16))
+                Label(task.done ? "Als offen markieren" : "Erledigt", systemImage: task.done ? "checkmark.circle.fill" : "circle")
+                    .labelStyle(.iconOnly)
+                    .scaledFont(size: 16)
                     .foregroundStyle(task.done ? Color.green : Color.secondary)
                     .contentTransition(.symbolEffect(.replace))
             }
@@ -297,6 +300,7 @@ struct TaskRow: View {
         }
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { app.sheet = .task(task.id, moduleID: nil) }
+        .accessibilityAction(named: "Bearbeiten") { app.sheet = .task(task.id, moduleID: nil) }
         .contextMenu {
             Button("Bearbeiten …") { app.sheet = .task(task.id, moduleID: nil) }
             Button("Zeit buchen …") { app.sheet = .logWork(LogPreset(taskID: task.id)) }
@@ -319,7 +323,9 @@ struct DeadlineCountdownCard: View {
         let list = store.upcomingDeadlines.prefix(5)
         VStack(alignment: .leading, spacing: 12) {
             SectionLabel("Fristen", symbol: "flag") {
-                Button { app.sheet = .deadline(nil, moduleID: nil, kind: nil) } label: { Image(systemName: "plus") }.buttonStyle(.borderless)
+                Button { app.sheet = .deadline(nil, moduleID: nil, kind: nil) } label: { Label("Neue Frist", systemImage: "plus").labelStyle(.iconOnly) }
+                    .buttonStyle(.borderless)
+                    .help("Neue Frist")
             }
             if list.isEmpty {
                 Text("Keine offenen Fristen.").foregroundStyle(.secondary).font(.callout)
@@ -330,16 +336,16 @@ struct DeadlineCountdownCard: View {
                     HStack(spacing: 12) {
                         VStack(spacing: -2) {
                             Text(days <= 0 ? "!" : "\(days)")
-                                .font(.system(size: 20, weight: .bold, design: .rounded).monospacedDigit())
-                            Text(days == 1 ? "Tag" : (days <= 0 ? "heute" : "Tage")).font(.system(size: 9, weight: .semibold))
+                                .scaledFont(size: 20, weight: .bold, design: .rounded).monospacedDigit()
+                            Text(days == 1 ? "Tag" : (days <= 0 ? "heute" : "Tage")).scaledFont(size: 9, weight: .semibold)
                         }
                         .foregroundStyle(urgency(days))
                         .frame(width: 42, height: 42)
                         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(urgency(days).opacity(0.12)))
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 5) {
-                                Image(systemName: d.kind.symbol).font(.system(size: 10)).foregroundStyle(d.kind.tint)
-                                Text(d.title).font(.system(size: 13, weight: .medium)).lineLimit(1)
+                                Image(systemName: d.kind.symbol).scaledFont(size: 10).foregroundStyle(d.kind.tint)
+                                Text(d.title).scaledFont(size: 13, weight: .medium).lineLimit(1)
                             }
                             Text([store.module(d.moduleID)?.name, Fmt.dateTime(d.date, allDay: d.allDay)].compactMap { $0 }.joined(separator: " · "))
                                 .font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -371,22 +377,24 @@ struct WeekProgressCard: View {
                 Button { app.selection = .week } label: { Text("Details").font(.callout) }.buttonStyle(.borderless)
             }
             HStack(alignment: .firstTextBaseline) {
-                Text(Fmt.hours(r.totalLogged)).font(.system(size: 26, weight: .bold, design: .rounded)).tracking(-0.5)
+                Text(Fmt.hours(r.totalLogged)).scaledFont(size: 26, weight: .bold, design: .rounded).tracking(-0.5)
                 Text("von \(Fmt.hours(r.totalGoal))").foregroundStyle(.secondary)
             }
             BarMeter(value: r.completion, color: .accentColor, height: 8, marker: elapsed)
             ForEach(r.lines) { l in
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        ModuleDot(color: l.color, size: 7)
-                        Text(l.name).font(.caption).lineLimit(1)
-                        Spacer()
-                        Text("\(Fmt.hours(l.logged)) / \(Fmt.hours(l.goal))").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                Button { app.openModule(l.id) } label: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            ModuleDot(color: l.color, size: 7)
+                            Text(l.name).font(.caption).lineLimit(1)
+                            Spacer()
+                            Text("\(Fmt.hours(l.logged)) / \(Fmt.hours(l.goal))").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                        }
+                        BarMeter(value: l.goal > 0 ? Double(l.logged) / Double(l.goal) : 0, color: l.color, height: 4)
                     }
-                    BarMeter(value: l.goal > 0 ? Double(l.logged) / Double(l.goal) : 0, color: l.color, height: 4)
+                    .contentShape(Rectangle())
                 }
-                .contentShape(Rectangle())
-                .onTapGesture { app.openModule(l.id) }
+                .buttonStyle(.pressable)
             }
             Button { app.sheet = .logWork(LogPreset()) } label: { Label("Zeit buchen", systemImage: "plus") }
                 .buttonStyle(.borderless).font(.callout)

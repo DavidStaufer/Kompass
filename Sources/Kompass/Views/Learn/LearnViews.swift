@@ -14,9 +14,9 @@ struct LearnTab: View {
         let due = cards.filter { $0.due <= Date() }
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                if !Secrets.hasDeepSeekKey { APIKeyHint() }
+                ClaudePendingCard(moduleID: module.id)
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 14)], spacing: 14) {
-                    ForEach([GeneratorKind.quiz, .flashcards, .summary, .mockExam, .studyPlan]) { k in
+                    ForEach([GeneratorKind.flashcards, .summary, .cheatSheet, .mustKnow, .quiz, .mockExam, .studyPlan]) { k in
                         GeneratorTile(kind: k) { app.sheet = .generator(k, module.id, []) }
                     }
                     GeneratorTileView(symbol: "bubble.left.and.text.bubble.right", title: "Abfragen im Chat",
@@ -31,11 +31,11 @@ struct LearnTab: View {
                     }
                     HStack(spacing: 20) {
                         VStack(alignment: .leading) {
-                            Text("\(due.count)").font(.system(size: 28, weight: .bold, design: .rounded))
+                            Text("\(due.count)").scaledFont(size: 28, weight: .bold, design: .rounded)
                             Text("fällig").font(.caption).foregroundStyle(.secondary)
                         }
                         VStack(alignment: .leading) {
-                            Text("\(cards.filter(\.isMature).count)/\(cards.count)").font(.system(size: 28, weight: .bold, design: .rounded))
+                            Text("\(cards.filter(\.isMature).count)/\(cards.count)").scaledFont(size: 28, weight: .bold, design: .rounded)
                             Text("gefestigt").font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
@@ -63,7 +63,7 @@ struct LearnTab: View {
                             Button("Starten") { app.sheet = .quiz(q.id) }
                             Menu {
                                 Button("Löschen", role: .destructive) { store.quizzes.removeAll { $0.id == q.id } }
-                            } label: { Image(systemName: "ellipsis") }
+                            } label: { Label("Weitere Aktionen", systemImage: "ellipsis").labelStyle(.iconOnly) }
                                 .plainMenu()
                         }
                         .padding(.vertical, 4)
@@ -78,10 +78,58 @@ struct LearnTab: View {
     }
 }
 
+/// Auswahl im Erstellen-Fenster: Claude über das Abo oder DeepSeek über die API.
+struct EnginePicker: View {
+    @Binding var useClaude: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Picker("Erstellen mit", selection: $useClaude) {
+                Text("Claude").tag(true)
+                Text("DeepSeek").tag(false)
+            }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 280)
+            Text(useClaude
+                 ? "Über dein Claude-Abo, ohne API-Kosten. Fertig mit dem nächsten Durchlauf (täglich um 7 Uhr) – sofort, wenn du in der Claude-App „Jetzt ausführen“ wählst."
+                 : "Sofort, kostet DeepSeek-Guthaben.")
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+/// Offene Claude-Aufträge eines Moduls.
+struct ClaudePendingCard: View {
+    @Environment(ClaudeBridge.self) private var claude
+    let moduleID: UUID
+
+    var body: some View {
+        let items = claude.pending(for: moduleID)
+        if !items.isEmpty {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "sparkles").foregroundStyle(Color.accentColor).accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Claude erstellt beim nächsten Durchlauf").scaledFont(size: 13, weight: .semibold)
+                    ForEach(items) { r in
+                        HStack {
+                            Text(r.label + (r.materialIDs.isEmpty ? "" : " · \(r.materialIDs.count) Material\(r.materialIDs.count == 1 ? "" : "ien")"))
+                                .font(.callout)
+                            Spacer()
+                            Button("Zurückziehen") { claude.cancel(r) }.buttonStyle(.borderless).font(.caption)
+                        }
+                    }
+                }
+            }
+            .card(padding: 14)
+        }
+    }
+}
+
 struct APIKeyHint: View {
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "key.fill").foregroundStyle(.orange)
+            Image(systemName: "key.fill").foregroundStyle(.orange).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text("DeepSeek-API-Key fehlt").font(.headline)
                 Text("Für KI-Funktionen trage deinen Key in den Einstellungen (⌘,) → KI ein. Er wird sicher im Schlüsselbund gespeichert.")
@@ -112,8 +160,9 @@ struct GeneratorTileView: View {
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 8) {
-                Image(systemName: symbol).font(.system(size: 20, weight: .medium)).foregroundStyle(Color.accentColor)
-                Text(title).font(.system(size: 14, weight: .semibold))
+                Image(systemName: symbol).scaledFont(size: 20, weight: .medium).foregroundStyle(Color.accentColor)
+                    .accessibilityHidden(true)
+                Text(title).scaledFont(size: 14, weight: .semibold)
                 Text(blurb).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }
@@ -141,7 +190,7 @@ struct DocsTab: View {
                     Text("Zusammenfassungen, Probeklausuren, Lernpläne und Notizen – von dir oder der KI.").font(.callout).foregroundStyle(.secondary)
                     Spacer()
                     Menu {
-                        ForEach([GeneratorKind.summary, .mockExam, .studyPlan]) { k in
+                        ForEach([GeneratorKind.summary, .cheatSheet, .mustKnow, .mockExam, .studyPlan]) { k in
                             Button { app.sheet = .generator(k, module.id, []) } label: { Label(k.label, systemImage: k.symbol) }
                         }
                         Divider()
@@ -163,7 +212,7 @@ struct DocsTab: View {
                         Button { app.sheet = .doc(d.id) } label: {
                             VStack(alignment: .leading, spacing: 6) {
                                 Label(d.kind.label, systemImage: d.kind.symbol).font(.caption.weight(.semibold)).foregroundStyle(module.color.color)
-                                Text(d.title).font(.system(size: 14, weight: .semibold)).lineLimit(2).multilineTextAlignment(.leading)
+                                Text(d.title).scaledFont(size: 14, weight: .semibold).lineLimit(2).multilineTextAlignment(.leading)
                                 Text(preview(d.markdown)).font(.caption).foregroundStyle(.secondary).lineLimit(3).multilineTextAlignment(.leading)
                                 Spacer(minLength: 0)
                                 Text(Fmt.dayShort(d.createdAt)).font(.caption2).foregroundStyle(.tertiary)
@@ -200,6 +249,9 @@ struct GeneratorSheet: View {
     let moduleID: UUID
     let preselected: [UUID]
 
+    @Environment(ClaudeBridge.self) private var claude
+    /// Claude (über das Abo, beim nächsten Durchlauf) oder DeepSeek (sofort, API-Kosten)
+    @AppStorage("generator.useClaude") private var useClaude = true
     @State private var selection: Set<UUID> = []
     @State private var options = GeneratorOptions()
     @State private var running = false
@@ -228,10 +280,11 @@ struct GeneratorSheet: View {
                 .frame(maxWidth: .infinity, minHeight: 260)
             } else {
                 Text(kind.blurb).foregroundStyle(.secondary)
+                if Secrets.deepSeekEnabled { EnginePicker(useClaude: $useClaude) }
                 optionsView
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Text("Grundlage").font(.system(size: 13, weight: .semibold))
+                        Text("Grundlage").scaledFont(size: 13, weight: .semibold)
                         Spacer()
                         Button("Alle") { selection = Set(mats.map(\.id)) }.buttonStyle(.borderless)
                         Button("Keine") { selection = [] }.buttonStyle(.borderless)
@@ -240,21 +293,22 @@ struct GeneratorSheet: View {
                         Text("Noch keine lesbaren Materialien – die KI nutzt dann Allgemeinwissen. Lade Folien, Übungen oder Altklausuren hoch, um bessere Ergebnisse zu bekommen.")
                             .font(.callout).foregroundStyle(.secondary)
                     }
+                    let groups = MaterialKind.allCases.compactMap { k -> (kind: MaterialKind, items: [Material])? in
+                        let items = mats.filter { $0.kind == k }
+                        return items.isEmpty ? nil : (k, items)
+                    }
                     List {
-                        ForEach(MaterialKind.allCases) { k in
-                            let items = mats.filter { $0.kind == k }
-                            if !items.isEmpty {
-                                Section(k.plural) {
-                                    ForEach(items) { m in
-                                        Toggle(isOn: Binding(get: { selection.contains(m.id) }, set: { on in if on { selection.insert(m.id) } else { selection.remove(m.id) } })) {
-                                            HStack {
-                                                Text(m.title).lineLimit(1)
-                                                Spacer()
-                                                Text("\(m.charCount / 1000)k Zeichen").font(.caption).foregroundStyle(.secondary)
-                                            }
+                        ForEach(groups, id: \.kind) { group in
+                            Section(group.kind.plural) {
+                                ForEach(group.items) { m in
+                                    Toggle(isOn: $selection[contains: m.id]) {
+                                        HStack {
+                                            Text(m.title).lineLimit(1)
+                                            Spacer()
+                                            Text("\(m.charCount / 1000)k Zeichen").font(.caption).foregroundStyle(.secondary)
                                         }
-                                        .checkboxStyle()
                                     }
+                                    .checkboxStyle()
                                 }
                             }
                         }
@@ -273,13 +327,13 @@ struct GeneratorSheet: View {
                 Spacer()
                 Button(result == nil ? "Abbrechen" : "Fertig") { task?.cancel(); dismiss() }.keyboardShortcut(.cancelAction)
                 if result == nil && !running {
-                    Button("Erstellen") { start() }
+                    Button(viaClaude ? "An Claude übergeben" : "Erstellen") { viaClaude ? queueForClaude() : start() }
                         .buttonStyle(.borderedProminent)
                         .keyboardShortcut(.defaultAction)
-                        .disabled(!Secrets.hasDeepSeekKey)
+                        .disabled(!viaClaude && !Secrets.hasDeepSeekKey)
                 }
             }
-            if !Secrets.hasDeepSeekKey { APIKeyHint() }
+            if !viaClaude && !Secrets.hasDeepSeekKey { APIKeyHint() }
         }
         .padding(20)
         .macFrame(width: 600)
@@ -328,8 +382,9 @@ struct GeneratorSheet: View {
     @ViewBuilder
     private func resultView(_ r: ChatAttachment) -> some View {
         VStack(spacing: 14) {
-            Image(systemName: "checkmark.circle.fill").font(.system(size: 44)).foregroundStyle(.green)
+            Image(systemName: "checkmark.circle.fill").scaledFont(size: 44).foregroundStyle(.green)
                 .symbolEffect(.bounce, value: result != nil)
+                .accessibilityHidden(true)
             Text(r.label).font(.headline).multilineTextAlignment(.center)
             switch r.kind {
             case .quiz:
@@ -347,6 +402,16 @@ struct GeneratorSheet: View {
             }
         }
         .frame(maxWidth: .infinity, minHeight: 240)
+    }
+
+    /// Ohne DeepSeek geht alles über Claude.
+    private var viaClaude: Bool { useClaude || !Secrets.deepSeekEnabled }
+
+    private func queueForClaude() {
+        guard let module = store.module(moduleID) else { return }
+        claude.enqueue(kind, module: module, materialIDs: Array(selection), options: options)
+        app.showToast("An Claude übergeben – kommt mit dem nächsten Durchlauf", symbol: "sparkles")
+        dismiss()
     }
 
     private func start() {
@@ -394,7 +459,7 @@ struct DocumentSheet: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Label(doc.kind.label, systemImage: doc.kind.symbol).font(.caption.weight(.semibold)).foregroundStyle(store.color(for: doc.moduleID))
                         TextField("Titel", text: Binding(get: { doc.title }, set: { v in update { $0.title = v } }))
-                            .textFieldStyle(.plain).font(.system(size: 20, weight: .bold))
+                            .textFieldStyle(.plain).scaledFont(size: 20, weight: .bold)
                     }
                     Spacer()
                     if doc.kind == .probeklausur {
@@ -419,7 +484,7 @@ struct DocumentSheet: View {
                 .padding(20)
                 Divider()
                 if editing {
-                    TextEditor(text: $draft).font(.system(size: 13, design: .monospaced)).padding(12)
+                    TextEditor(text: $draft).scaledFont(size: 13, design: .monospaced).padding(12)
                 } else {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 16) {

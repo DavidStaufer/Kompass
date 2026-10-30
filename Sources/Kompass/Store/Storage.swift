@@ -193,6 +193,22 @@ enum CoordinatedFile {
         u.removeAllCachedResourceValues()
         return (try? u.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
     }
+
+    /// iCloud: Liegt in der Cloud eine neuere Fassung, als dieses Gerät hat? Dann wird sie angefordert –
+    /// bis sie da ist, darf die alte Kopie nicht überschrieben werden.
+    static func needsDownload(_ url: URL) -> Bool {
+        var u = url
+        u.removeAllCachedResourceValues()
+        guard let v = try? u.resourceValues(forKeys: [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey]),
+              v.isUbiquitousItem == true, let status = v.ubiquitousItemDownloadingStatus, status != .current else { return false }
+        try? FileManager.default.startDownloadingUbiquitousItem(at: url)
+        return true
+    }
+
+    /// Fassungen, die iCloud aufbewahrt, wenn zwei Geräte gleichzeitig gespeichert haben.
+    static func conflictVersions(_ url: URL) -> [NSFileVersion] {
+        NSFileVersion.unresolvedConflictVersionsOfItem(at: url) ?? []
+    }
 }
 
 /// Dreiwege-Zusammenführung zweier Datenstände (lokal vs. anderes Gerät) auf Datensatz-Ebene.
@@ -220,6 +236,27 @@ enum DataMerge {
             }
         }
         return out
+    }
+
+    /// Schutz vor veralteten Kopien: Verschwindet beim Abgleich auf einen Schlag ein großer Teil der Einträge
+    /// (z. B. alle Module), stammt das praktisch immer von einem Gerät mit altem Stand – nicht von echtem Löschen.
+    /// Solche „Löschungen“ werden nicht übernommen; geliefert werden der bereinigte Fremdstand und die betroffenen Schlüssel.
+    static func blockingMassDeletions(base: [String: Any], local: [String: Any], remote: [String: Any]) -> (remote: [String: Any], blocked: [String]) {
+        var out = remote
+        var blocked: [String] = []
+        for (key, b) in base {
+            guard let ba = b as? [Any], isRecordArray(ba), let la = local[key] as? [Any] else { continue }
+            let ra = (remote[key] as? [Any]) ?? []
+            let baseIDs = Set(ba.compactMap(id))
+            let remoteIDs = Set(ra.compactMap(id))
+            var localByID: [String: Any] = [:]
+            for x in la { if let i = id(x) { localByID[i] = x } }
+            let removed = baseIDs.subtracting(remoteIDs).filter { localByID[$0] != nil }
+            guard removed.count >= 2, removed.count * 2 >= baseIDs.count else { continue }
+            out[key] = ra + removed.sorted().compactMap { localByID[$0] }
+            blocked.append(key)
+        }
+        return (out, blocked.sorted())
     }
 
     private static func isRecordArray(_ a: [Any]) -> Bool {

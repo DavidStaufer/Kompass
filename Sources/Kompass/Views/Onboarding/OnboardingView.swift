@@ -91,7 +91,7 @@ struct OnboardingView: View {
         case .welcome:
             VStack(spacing: 16) {
                 AppGlyph().frame(width: 96, height: 96)
-                Text("Willkommen bei Kompass").font(.system(size: 30, weight: .bold)).tracking(-0.7).multilineTextAlignment(.center)
+                Text("Willkommen bei Kompass").scaledFont(size: 30, weight: .bold).tracking(-0.7).multilineTextAlignment(.center)
                 Text("Dein Studium, deine Arbeit und dein Lernen – an einem Ort. Kompass plant deine Woche, erinnert dich an Fristen und lernt mit dir.")
                     .multilineTextAlignment(.center).foregroundStyle(.secondary).frame(maxWidth: 440)
                 TextField("Wie heißt du?", text: $name)
@@ -120,7 +120,7 @@ struct OnboardingView: View {
                     TextField("Name", text: $term.name)
                     DatePicker("Beginn", selection: $term.start, displayedComponents: .date)
                     DatePicker("Ende", selection: $term.end, in: term.start..., displayedComponents: .date)
-                    DatePicker("Vorlesungsende", selection: Binding(get: { term.lectureEnd ?? term.end }, set: { term.lectureEnd = $0 }), in: term.start...term.end, displayedComponents: .date)
+                    DatePicker("Vorlesungsende", selection: $term.lectureEndOrEnd, in: term.start...term.end, displayedComponents: .date)
                 }
                 .formStyle(.grouped).frame(height: 240).frame(maxWidth: 460)
                 .scrollDisabled(true)
@@ -208,8 +208,10 @@ struct OnboardingPage<Content: View>: View {
     @ViewBuilder var content: Content
     var body: some View {
         VStack(spacing: 14) {
-            Image(systemName: symbol).font(.system(size: 34, weight: .medium)).foregroundStyle(Color.accentColor)
-            Text(title).font(.system(size: 24, weight: .bold)).tracking(-0.5)
+            Image(systemName: symbol).scaledFont(size: 34, weight: .medium).foregroundStyle(Color.accentColor)
+                .accessibilityHidden(true)
+            Text(title).scaledFont(size: 24, weight: .bold).tracking(-0.5)
+                .accessibilityAddTraits(.isHeader)
             Text(text).multilineTextAlignment(.center).foregroundStyle(.secondary).frame(maxWidth: 460)
             content.padding(.top, 6)
         }
@@ -224,6 +226,7 @@ struct AccessRow: View {
         HStack {
             Image(systemName: ok ? "checkmark.circle.fill" : "circle").foregroundStyle(ok ? .green : .secondary)
                 .contentTransition(.symbolEffect(.replace))
+                .accessibilityHidden(true)
             Text(title)
             Spacer()
             Text(ok ? "Erlaubt" : "Ausstehend").foregroundStyle(.secondary).font(.callout)

@@ -57,7 +57,14 @@ final class DataStore {
     @ObservationIgnored private var lastModDate: Date?
     @ObservationIgnored private var pollTimer: Timer?
     @ObservationIgnored var reloaded: (() -> Void)?
+    /// Seit wann dieses Gerät auf die neueste iCloud-Fassung wartet (so lange wird nicht überschrieben).
+    @ObservationIgnored private var waitingForDownloadSince: Date?
     var loadError: String?
+    /// Für den Fehlerdialog: Schließen setzt den Fehler zurück.
+    var showsLoadError: Bool {
+        get { loadError != nil }
+        set { if !newValue { loadError = nil } }
+    }
     /// Zeitpunkt der letzten Übernahme von Änderungen eines anderen Geräts.
     var lastRemoteSync: Date?
 
@@ -81,6 +88,9 @@ final class DataStore {
             baseJSON = (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
             lastModDate = CoordinatedFile.modificationDate(url)
             loadError = nil
+            // Hat iCloud schon eine neuere Fassung? Dann erst die abwarten, bevor dieses Gerät speichert.
+            waitingForDownloadSince = CoordinatedFile.needsDownload(url) ? Date() : nil
+            mergeConflictVersions()
         } catch {
             loadError = "Die Daten konnten nicht gelesen werden (\(error.localizedDescription)). Eine Sicherung liegt im Ordner „Backups“."
             let broken = Paths.root.appendingPathComponent("kompass-defekt-\(Int(Date().timeIntervalSince1970)).json")
@@ -157,6 +167,8 @@ final class DataStore {
     func checkForRemoteChanges() {
         guard StorageLocation.shared.mode == .iCloud || Paths.isDemo else { return }
         let url = Paths.dataFile
+        mergeConflictVersions()
+        if CoordinatedFile.needsDownload(url) { return } // neuere Fassung wird gerade geladen
         guard let mod = CoordinatedFile.modificationDate(url), mod != lastModDate else { return }
         if saveTask != nil {
             saveNow() // führt beim Speichern zusammen
@@ -165,7 +177,7 @@ final class DataStore {
         guard let data = CoordinatedFile.read(url),
               let remote = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
         let local = currentJSON()
-        let merged = DataMerge.merge(base: baseJSON, local: local, remote: remote)
+        let merged = DataMerge.merge(base: baseJSON, local: local, remote: guardedRemote(remote, local: local))
         if let mergedData = try? JSONSerialization.data(withJSONObject: merged), let d = try? AppData.load(from: mergedData) {
             apply(d)
             reloaded?()
@@ -215,16 +227,35 @@ final class DataStore {
 
     var hasPendingSave: Bool { saveTask != nil }
 
-    func saveNow() {
+    /// `force`: beim Beenden bzw. Wechsel in den Hintergrund trotzdem sofort schreiben.
+    func saveNow(force: Bool = false) {
         saveTask?.cancel()
         saveTask = nil
         let url = Paths.dataFile
+        if StorageLocation.shared.mode == .iCloud && !force {
+            mergeConflictVersions()
+            // Eine neuere Fassung ist in iCloud, aber noch nicht hier: nicht mit dem alten Stand überschreiben,
+            // sondern kurz warten (höchstens eine Minute, dann schützen Konflikt- und Löschschutz).
+            if CoordinatedFile.needsDownload(url) {
+                let since = waitingForDownloadSince ?? Date()
+                waitingForDownloadSince = since
+                if Date().timeIntervalSince(since) < 60 {
+                    saveTask = Task { [weak self] in
+                        try? await Task.sleep(nanoseconds: 3_000_000_000)
+                        guard !Task.isCancelled else { return }
+                        self?.saveNow()
+                    }
+                    return
+                }
+            }
+            waitingForDownloadSince = nil
+        }
         var local = currentJSON()
         // Hat ein anderes Gerät inzwischen gespeichert? Dann erst zusammenführen.
         if let mod = CoordinatedFile.modificationDate(url), mod != lastModDate,
            let data = CoordinatedFile.read(url),
            let remote = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            local = DataMerge.merge(base: baseJSON, local: local, remote: remote)
+            local = DataMerge.merge(base: baseJSON, local: local, remote: guardedRemote(remote, local: local))
             if let mergedData = try? JSONSerialization.data(withJSONObject: local), let d = try? AppData.load(from: mergedData) {
                 apply(d)
                 reloaded?()
@@ -241,15 +272,61 @@ final class DataStore {
         }
     }
 
-    /// Eine Sicherung pro Tag, die letzten 30 werden behalten.
+    /// Sicherungen: täglich (letzte 30 Tage) und stündlich (letzte 48 Stunden).
     private func backupIfNeeded(_ data: Data) {
-        let name = "kompass-\(Fmt.machineDay.string(from: Date())).json"
+        let now = Date()
+        let day = Fmt.machineDay.string(from: now)
+        writeBackup(data, name: "kompass-\(day).json", prefix: "kompass-", keep: 30, replace: false)
+        let hour = String(format: "%02d", Calendar.kompass.component(.hour, from: now))
+        writeBackup(data, name: "stunde-\(day)-\(hour).json", prefix: "stunde-", keep: 48, replace: false)
+    }
+
+    /// Sicherung vor einem Eingriff (Konflikt, blockierte Löschung) – die letzten 20 je Art bleiben.
+    private func safetyBackup(_ json: [String: Any], kind: String) {
+        guard let data = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]) else { return }
+        writeBackup(data, name: "\(kind)-\(Int(Date().timeIntervalSince1970)).json", prefix: "\(kind)-", keep: 20, replace: true)
+    }
+
+    private func writeBackup(_ data: Data, name: String, prefix: String, keep: Int, replace: Bool) {
         let url = Paths.backups.appendingPathComponent(name)
-        if !FileManager.default.fileExists(atPath: url.path) {
-            try? data.write(to: url, options: .atomic)
-            let files = (try? FileManager.default.contentsOfDirectory(at: Paths.backups, includingPropertiesForKeys: nil)) ?? []
-            let sorted = files.filter { $0.lastPathComponent.hasPrefix("kompass-") }.sorted { $0.lastPathComponent > $1.lastPathComponent }
-            for old in sorted.dropFirst(30) { try? FileManager.default.removeItem(at: old) }
+        guard replace || !FileManager.default.fileExists(atPath: url.path) else { return }
+        try? data.write(to: url, options: .atomic)
+        let files = (try? FileManager.default.contentsOfDirectory(at: Paths.backups, includingPropertiesForKeys: nil)) ?? []
+        let sorted = files.filter { $0.lastPathComponent.hasPrefix(prefix) }.sorted { $0.lastPathComponent > $1.lastPathComponent }
+        for old in sorted.dropFirst(keep) { try? FileManager.default.removeItem(at: old) }
+    }
+
+    /// Fremdstand ohne verdächtige Massenlöschungen (siehe `DataMerge.blockingMassDeletions`).
+    private func guardedRemote(_ remote: [String: Any], local: [String: Any]) -> [String: Any] {
+        let g = DataMerge.blockingMassDeletions(base: baseJSON, local: local, remote: remote)
+        if !g.blocked.isEmpty {
+            NSLog("Kompass: Massenlöschung aus anderem Stand blockiert (%@)", g.blocked.joined(separator: ", "))
+            safetyBackup(remote, kind: "blockiert")
+        }
+        return g.remote
+    }
+
+    /// iCloud bewahrt bei gleichzeitigem Speichern zweier Geräte die unterlegene Fassung als Konflikt auf.
+    /// Kompass vereinigt sie mit dem aktuellen Stand (es geht nichts verloren) und markiert sie als gelöst.
+    private func mergeConflictVersions() {
+        let versions = CoordinatedFile.conflictVersions(Paths.dataFile)
+        guard !versions.isEmpty else { return }
+        var merged = currentJSON()
+        var used = 0
+        for v in versions {
+            guard let data = try? Data(contentsOf: v.url),
+                  let other = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
+            safetyBackup(other, kind: "konflikt")
+            merged = DataMerge.merge(base: [:], local: merged, remote: other)
+            used += 1
+        }
+        guard used > 0 else { return }
+        if let data = try? JSONSerialization.data(withJSONObject: merged), let d = try? AppData.load(from: data) {
+            apply(d)
+            reloaded?()
+            for v in versions { v.isResolved = true }
+            NSLog("Kompass: %d iCloud-Konfliktfassung(en) zusammengeführt", used)
+            scheduleSave()
         }
     }
 
@@ -258,6 +335,12 @@ final class DataStore {
     var currentTerm: Term? {
         if let id = prefs.currentTermID, let t = terms.first(where: { $0.id == id }) { return t }
         return terms.first(where: { $0.contains(Date()) }) ?? terms.sorted { $0.start > $1.start }.first
+    }
+
+    /// Auswahl im Semester-Menü: zeigt das aktuelle (auch automatisch erkannte) Semester.
+    var selectedTermID: UUID? {
+        get { currentTerm?.id }
+        set { prefs.currentTermID = newValue }
     }
 
     func term(_ id: UUID?) -> Term? { terms.first { $0.id == id } }
@@ -282,13 +365,6 @@ final class DataStore {
         var m = modules[i]
         change(&m)
         modules[i] = m
-    }
-
-    func moduleBinding(_ id: UUID) -> Binding<Module> {
-        Binding(
-            get: { self.module(id) ?? Module(name: "") },
-            set: { new in if let i = self.moduleIndex(id) { self.modules[i] = new } }
-        )
     }
 
     /// Findet ein Modul per ID, Kürzel oder Namen (für die KI).
@@ -353,6 +429,8 @@ final class DataStore {
 
     func deleteMaterial(_ id: UUID) {
         guard let (m, mat) = material(id) else { return }
+        // Aus WueCampus übernommen → nicht erneut herunterladen
+        if let key = mat.sourceKey, !prefs.wueIgnoredKeys.contains(key) { prefs.wueIgnoredKeys.append(key) }
         try? FileManager.default.removeItem(at: Paths.materialFile(m.id, mat))
         try? FileManager.default.removeItem(at: Paths.textFile(m.id, id))
         textCache[id] = nil

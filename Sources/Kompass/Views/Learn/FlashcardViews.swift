@@ -22,9 +22,9 @@ struct FlashcardsHome: View {
                         let cards = store.flashcards.filter { $0.moduleID == m.id }
                         let d = cards.filter { $0.due <= Date() }.count
                         VStack(alignment: .leading, spacing: 10) {
-                            HStack { ModuleDot(color: m.color.color); Text(m.name).font(.system(size: 14, weight: .semibold)).lineLimit(1) }
+                            HStack { ModuleDot(color: m.color.color); Text(m.name).scaledFont(size: 14, weight: .semibold).lineLimit(1) }
                             HStack(alignment: .firstTextBaseline, spacing: 4) {
-                                Text("\(d)").font(.system(size: 26, weight: .bold, design: .rounded))
+                                Text("\(d)").scaledFont(size: 26, weight: .bold, design: .rounded)
                                 Text("fällig · \(cards.count) gesamt").font(.caption).foregroundStyle(.secondary)
                             }
                             BarMeter(value: cards.isEmpty ? 0 : Double(cards.filter(\.isMature).count) / Double(cards.count), color: m.color.color, height: 5)
@@ -32,8 +32,10 @@ struct FlashcardsHome: View {
                                 Button("Lernen") { app.sheet = .cardReview(m.id) }.disabled(d == 0)
                                 Button("Ansehen") { browseModule = m.id }
                                 Spacer()
-                                Button { app.sheet = .generator(.flashcards, m.id, []) } label: { Image(systemName: "sparkles") }
-                                    .help("Karten mit KI erstellen")
+                                Button { app.sheet = .generator(.flashcards, m.id, []) } label: {
+                                    Label("Karten mit KI erstellen", systemImage: "sparkles").labelStyle(.iconOnly)
+                                }
+                                .help("Karten mit KI erstellen")
                             }
                             .controlSize(.small)
                         }
@@ -76,7 +78,9 @@ struct FlashcardsHome: View {
                         if !c.topic.isEmpty { Text(c.topic).font(.caption2).foregroundStyle(.secondary) }
                     }
                     .frame(width: 90, alignment: .trailing)
-                    Button { store.flashcards.removeAll { $0.id == c.id } } label: { Image(systemName: "trash") }.buttonStyle(.borderless)
+                    Button { store.flashcards.removeAll { $0.id == c.id } } label: { Label("Karte löschen", systemImage: "trash").labelStyle(.iconOnly) }
+                        .buttonStyle(.borderless)
+                        .help("Karte löschen")
                 }
                 .padding(.vertical, 4)
                 Divider()
@@ -115,8 +119,9 @@ struct CardReviewSheet: View {
                 ratingBar(card)
             } else {
                 VStack(spacing: 12) {
-                    Image(systemName: "checkmark.seal.fill").font(.system(size: 52)).foregroundStyle(.green)
+                    Image(systemName: "checkmark.seal.fill").scaledFont(size: 52).foregroundStyle(.green)
                         .symbolEffect(.bounce, value: reviewed)
+                        .accessibilityHidden(true)
                     Text(reviewed == 0 ? "Keine Karten fällig." : "Geschafft! \(reviewed) Karten wiederholt.").font(.title3.weight(.semibold))
                     if reviewed > 0 { Text("\(Fmt.percent(Double(correct) / Double(max(1, reviewed)))) gewusst").foregroundStyle(.secondary) }
                 }
@@ -130,7 +135,7 @@ struct CardReviewSheet: View {
             loaded = true
             queue = store.dueCards(moduleID: moduleID).prefix(60).map(\.id)
         }
-        .onKeyPress(.space) { withAnimation(Motion.pick(reduce, Motion.momentum)) { flipped.toggle() }; return .handled }
+        .onKeyPress(.space) { flip(); return .handled }
         .onKeyPress(characters: CharacterSet(charactersIn: "1234")) { press in
             guard flipped, let g = Int(press.characters) else { return .ignored }
             rate(g - 1)
@@ -143,9 +148,11 @@ struct CardReviewSheet: View {
         return ZStack {
             face(text: c.front, label: c.topic.isEmpty ? "Frage" : c.topic, color: color)
                 .opacity(flipped ? 0 : 1)
+                .accessibilityHidden(flipped)
             face(text: c.back, label: "Antwort", color: color)
                 .rotation3DEffect(.degrees(reduce ? 0 : 180), axis: (x: 0, y: 1, z: 0))
                 .opacity(flipped ? 1 : 0)
+                .accessibilityHidden(!flipped)
         }
         .rotation3DEffect(.degrees(flipped && !reduce ? 180 : 0), axis: (x: 0, y: 1, z: 0), perspective: 0.4)
         .offset(x: offset)
@@ -158,14 +165,23 @@ struct CardReviewSheet: View {
             }
         }
         .contentShape(Rectangle())
-        .onTapGesture { withAnimation(Motion.pick(reduce, Motion.momentum)) { flipped.toggle() } }
+        // Geste statt Button: Tippen zum Umdrehen und Wischen zum Bewerten auf derselben Karte.
+        .onTapGesture(perform: flip)
         .gesture(swipe)
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Umdrehen")
+        .accessibilityAction { flip() }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func flip() {
+        withAnimation(Motion.pick(reduce, Motion.momentum)) { flipped.toggle() }
     }
 
     private func face(text: String, label: String, color: Color) -> some View {
         VStack(spacing: 14) {
-            Text(label.uppercased()).font(.system(size: 11, weight: .bold)).tracking(0.8).foregroundStyle(color)
+            Text(label.uppercased()).scaledFont(size: 11, weight: .bold).tracking(0.8).foregroundStyle(color)
             ScrollView {
                 MarkdownView(text: text, baseSize: 17)
                     .multilineTextAlignment(.center)

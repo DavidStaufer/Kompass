@@ -149,6 +149,7 @@ enum ToolDefinitions {
             "keys": P.a("Schlüssel aus list_unconfirmed", P.s("key")), "all": P.b("Alle offenen der letzten 7 Tage"),
             "attended": P.b("true = wahrgenommen (Standard), false = nicht wahrgenommen")
         ]))
+        t.append(fn("sync_wuecampus", "Holt neue Dateien, Abgabetermine und Termine aus WueCampus (Moodle der Uni Würzburg) in die verknüpften Module."))
         t.append(fn("create_time_category", "Legt eine eigene Zeitkategorie an (z. B. Sport, Haushalt).", [
             "name": P.s("Name"), "color": P.e("Farbe", ModuleColor.allCases.map(\.rawValue))
         ], ["name"]))
@@ -212,6 +213,7 @@ enum ToolDefinitions {
         case "list_unconfirmed": return "Prüft offene Termine"
         case "confirm_attendance": return "Bestätigt Termine"
         case "create_time_category": return "Legt Kategorie an"
+        case "sync_wuecampus": return "Synchronisiert WueCampus"
         case "get_week_review": return "Erstellt Wochenbilanz"
         case "plan_study_blocks": return "Plant Lernblöcke"
         case "clear_study_blocks": return "Räumt Lernblöcke auf"

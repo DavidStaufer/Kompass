@@ -162,28 +162,30 @@ struct SessionEditorRow: View {
     }
 
     private var kind: some View {
-        Picker("", selection: $session.kind) { ForEach(SessionKind.allCases) { Text($0.label).tag($0) } }.labelsHidden()
+        Picker("Art", selection: $session.kind) { ForEach(SessionKind.allCases) { Text($0.label).tag($0) } }.labelsHidden()
     }
     private var weekday: some View {
-        Picker("", selection: $session.weekday) { ForEach(1...7, id: \.self) { Text(Fmt.weekday($0, short: true)).tag($0) } }.labelsHidden()
+        Picker("Wochentag", selection: $session.weekday) { ForEach(1...7, id: \.self) { Text(Fmt.weekday($0, short: true)).tag($0) } }.labelsHidden()
     }
     private var times: some View {
         HStack {
-            DatePicker("", selection: minutesBinding($session.startMinutes), displayedComponents: .hourAndMinute).labelsHidden()
+            DatePicker("Beginn", selection: minutesBinding($session.startMinutes), displayedComponents: .hourAndMinute).labelsHidden()
                 .onChange(of: session.startMinutes) { old, new in
                     if session.endMinutes <= new { session.endMinutes = new + 90 }
                     else if old < session.endMinutes { session.endMinutes = min(24 * 60 - 1, session.endMinutes + (new - old)) }
                 }
-            Text("–")
-            DatePicker("", selection: minutesBinding($session.endMinutes), displayedComponents: .hourAndMinute).labelsHidden()
+            Text("–").accessibilityHidden(true)
+            DatePicker("Ende", selection: minutesBinding($session.endMinutes), displayedComponents: .hourAndMinute).labelsHidden()
         }
     }
     private var biweekly: some View {
         Toggle("14-tägl.", isOn: $session.biweekly).checkboxStyle().fixedSize()
     }
     private var deleteButton: some View {
-        Button(role: .destructive, action: onDelete) { Image(systemName: "minus.circle.fill").foregroundStyle(.secondary) }
-            .buttonStyle(.borderless)
+        Button(role: .destructive, action: onDelete) {
+            Label("Termin entfernen", systemImage: "minus.circle.fill").labelStyle(.iconOnly).foregroundStyle(.secondary)
+        }
+        .buttonStyle(.borderless)
     }
 }
 
@@ -271,7 +273,7 @@ struct TermEditor: View {
                 DatePicker("Ende", selection: $t.end, in: t.start..., displayedComponents: .date)
                 Toggle("Vorlesungsende angeben", isOn: $hasLectureEnd)
                 if hasLectureEnd {
-                    DatePicker("Vorlesungsende", selection: Binding(get: { t.lectureEnd ?? t.end }, set: { t.lectureEnd = $0 }), in: t.start...t.end, displayedComponents: .date)
+                    DatePicker("Vorlesungsende", selection: $t.lectureEndOrEnd, in: t.start...t.end, displayedComponents: .date)
                 }
             }
             .sheetForm()

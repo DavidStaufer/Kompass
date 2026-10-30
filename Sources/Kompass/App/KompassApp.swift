@@ -1,5 +1,6 @@
 import SwiftUI
 import UserNotifications
+import CryptoKit
 #if os(macOS)
 import AppKit
 #else
@@ -57,6 +58,8 @@ extension View {
             .environment(model.calendar)
             .environment(model.timer)
             .environment(model.assistant)
+            .environment(model.wue)
+            .environment(model.claude)
     }
 }
 
@@ -65,6 +68,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     func applicationDidFinishLaunching(_ notification: Notification) {
         UNUserNotificationCenter.current().delegate = self
         DemoSupport.runSelfTestIfRequested()
+        if Paths.isDemo {
+            // Demo: Hauptfenster sicher anzeigen (auch wenn es zuletzt geschlossen war)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                NSApp.windows.filter { $0.frame.width > 300 }.forEach { $0.makeKeyAndOrderFront(nil) }
+            }
+        }
         if Paths.isDemo, let path = UserDefaults.standard.string(forKey: "kompass.snapshot") {
             let delay = UserDefaults.standard.double(forKey: "kompass.snapshotDelay")
             DispatchQueue.main.asyncAfter(deadline: .now() + (delay > 0 ? delay : 3)) {
@@ -97,7 +106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     func applicationWillTerminate(_ notification: Notification) {
         MainActor.assumeIsolated {
-            AppModel.shared.store.saveNow()
+            AppModel.shared.store.saveNow(force: true)
         }
     }
 
@@ -182,6 +191,28 @@ enum DemoSupport {
                 ("nur dort bearbeitet → übernommen", names(DataMerge.merge(base: base, local: base, remote: ["modules": [rec("a", "R"), rec("b", "B")]])["modules"]) == ["R", "B"])
             ]
             for (name, ok) in checks where !ok { failed += 1; print("FAIL Merge: \(name)") }
+            // Schutz vor veralteten Kopien: ein Gerät mit altem Stand „löscht“ alle Module
+            let four: [String: Any] = ["modules": [rec("a", "A"), rec("b", "B"), rec("c", "C"), rec("d", "D")]]
+            let wiped = DataMerge.blockingMassDeletions(base: four, local: four, remote: ["modules": [Any]()])
+            let kept = DataMerge.merge(base: four, local: four, remote: wiped.remote)
+            let single = DataMerge.blockingMassDeletions(base: four, local: four, remote: ["modules": [rec("a", "A"), rec("b", "B"), rec("c", "C")]])
+            let union = DataMerge.merge(base: [:], local: ["modules": [Any](), "prefs": ["wueLastSync": NSNull()]], remote: four)
+            let safety: [(String, Bool)] = [
+                ("Massenlöschung blockiert", wiped.blocked == ["modules"] && names(kept["modules"]).count == 4),
+                ("einzelne Löschung erlaubt", single.blocked.isEmpty),
+                ("Konfliktfassung wird vereinigt", names(union["modules"]).sorted() == ["A", "B", "C", "D"])
+            ]
+            for (name, ok) in safety where !ok { failed += 1; print("FAIL Schutz: \(name)") }
+            // WueCampus-Login: Antwort von launch.php auswerten
+            MainActor.assumeIsolated {
+                let site = URL(string: "https://wuecampus.uni-wuerzburg.de/moodle")!
+                let passport = "12345"
+                let sig = Insecure.MD5.hash(data: Data((site.absoluteString + passport).utf8)).map { String(format: "%02x", $0) }.joined()
+                let good = URL(string: "moodlemobile://token=" + Data("\(sig):::abc123:::priv".utf8).base64EncodedString())!
+                let bad = URL(string: "moodlemobile://token=" + Data("falsch:::abc123".utf8).base64EncodedString())!
+                if (try? MoodleAuth.parseToken(callback: good, site: site, passport: passport)) != "abc123" { failed += 1; print("FAIL WueCampus-Token lesen") }
+                if (try? MoodleAuth.parseToken(callback: bad, site: site, passport: passport)) != nil { failed += 1; print("FAIL WueCampus-Signatur nicht geprüft") }
+            }
             print(failed == 0 ? "SELFTEST OK" : "SELFTEST: \(failed) Fehler")
             exit(failed == 0 ? 0 : 1)
     }

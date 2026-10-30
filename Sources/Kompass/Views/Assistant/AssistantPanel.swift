@@ -1,61 +1,67 @@
 import SwiftUI
 
 struct AssistantPanel: View {
-    @Environment(\.isCompactLayout) private var compact
-    @Environment(AppModel.self) private var app
-    @Environment(DataStore.self) private var store
-    @Environment(Assistant.self) private var assistant
     var previewChat = false
     @State private var hasKey = Secrets.hasDeepSeekKey
-    @FocusState private var inputFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
-            header
+            AssistantHeader()
             Divider()
-            if !hasKey {
+            if !Secrets.deepSeekEnabled {
+                AssistantPausedCard()
+                    .padding(16)
+                Spacer()
+            } else if !hasKey {
                 KeySetupCard { hasKey = true }
                     .padding(16)
                 Spacer()
             } else {
-                messagesView
-                inputBar
+                // Eigene Views: Streaming und Tippen aktualisieren nur den jeweils betroffenen Teil.
+                ChatTranscript()
+                ChatInputBar()
             }
         }
         .background(Color.appBackground)
-        .onAppear { hasKey = previewChat || Secrets.hasDeepSeekKey; inputFocused = true }
+        .onAppear { hasKey = previewChat || Secrets.hasDeepSeekKey }
         .onReceive(NotificationCenter.default.publisher(for: .kompassKeyChanged)) { _ in hasKey = Secrets.hasDeepSeekKey }
         #if os(iOS)
         .presentationDetents([.large])
         #endif
     }
+}
 
-    // MARK: Kopf
+// MARK: Kopf
 
-    private var header: some View {
-        @Bindable var assistant = assistant
-        return HStack(spacing: 8) {
-            Image(systemName: "sparkles").foregroundStyle(Color.accentColor)
+private struct AssistantHeader: View {
+    @Environment(AppModel.self) private var app
+    @Environment(DataStore.self) private var store
+    @Environment(Assistant.self) private var assistant
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "sparkles").foregroundStyle(Color.accentColor).accessibilityHidden(true)
             Menu {
-                Button { assistant.scopeModuleID = nil } label: {
-                    if assistant.scopeModuleID == nil { Label("Allgemein", systemImage: "checkmark") } else { Text("Allgemein") }
-                }
-                Divider()
-                ForEach(store.activeModules) { m in
-                    Button { assistant.scopeModuleID = m.id } label: {
-                        if assistant.scopeModuleID == m.id { Label(m.name, systemImage: "checkmark") } else { Text(m.name) }
+                Picker("Kontext", selection: Bindable(assistant).scopeModuleID) {
+                    Text("Allgemein").tag(UUID?.none)
+                    Section {
+                        ForEach(store.activeModules) { m in Text(m.name).tag(UUID?.some(m.id)) }
                     }
                 }
+                .pickerStyle(.inline)
+                .labelsHidden()
             } label: {
-                Text(store.module(assistant.scopeModuleID)?.name ?? "Assistent").font(.system(size: 14, weight: .semibold))
+                Text(store.module(assistant.scopeModuleID)?.name ?? "Assistent").scaledFont(size: 14, weight: .semibold)
             }
             .plainMenu(indicator: true)
             .help("Kontext wählen – im Modul-Kontext kennt die KI dessen Materialien")
             Spacer()
-            Button { assistant.clear() } label: { Image(systemName: "square.and.pencil") }
-                .buttonStyle(.borderless)
-                .help("Neues Gespräch")
-                .disabled(assistant.messages.isEmpty)
+            Button { assistant.clear() } label: {
+                Label("Neues Gespräch", systemImage: "square.and.pencil").labelStyle(.iconOnly)
+            }
+            .buttonStyle(.borderless)
+            .help("Neues Gespräch")
+            .disabled(assistant.messages.isEmpty)
             #if os(iOS)
             Button("Fertig") { withAnimation(Motion.standard) { app.showAssistant = false } }
                 .fontWeight(.semibold)
@@ -65,41 +71,51 @@ struct AssistantPanel: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
     }
+}
 
-    // MARK: Verlauf
+// MARK: Verlauf
 
-    private var messagesView: some View {
+private struct ChatTranscript: View {
+    @Environment(Assistant.self) private var assistant
+
+    var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
-                    if assistant.messages.isEmpty && !assistant.isRunning { suggestions }
+                    if assistant.messages.isEmpty && !assistant.isRunning { ChatSuggestions() }
                     ForEach(assistant.messages) { m in
                         MessageView(message: m)
                             .id(m.id)
                     }
-                    if assistant.isRunning { liveView }
-                    if let c = assistant.confirmation { confirmationCard(c) }
+                    if assistant.isRunning { LiveReply(proxy: proxy) }
+                    if let c = assistant.confirmation { ConfirmationCard(confirmation: c) }
                     if let e = assistant.errorText {
                         HStack(alignment: .top, spacing: 8) {
-                            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange).accessibilityHidden(true)
                             Text(e).font(.callout)
                         }
                         .padding(10)
                         .background(RoundedRectangle(cornerRadius: 10).fill(Color.orange.opacity(0.1)))
                     }
-                    Color.clear.frame(height: 1).id("bottom")
+                    Color.clear.frame(height: 1).id(ChatTranscript.bottom)
                 }
                 .padding(14)
             }
-            .onChange(of: assistant.messages.count) { _, _ in withAnimation(Motion.standard) { proxy.scrollTo("bottom", anchor: .bottom) } }
-            .onChange(of: assistant.live?.content.count ?? 0) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
-            .onChange(of: assistant.confirmation?.id) { _, _ in withAnimation(Motion.standard) { proxy.scrollTo("bottom", anchor: .bottom) } }
-            .onChange(of: assistant.key) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
-            .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
+            .onChange(of: assistant.messages.count) { _, _ in withAnimation(Motion.standard) { proxy.scrollTo(ChatTranscript.bottom, anchor: .bottom) } }
+            .onChange(of: assistant.confirmation?.id) { _, _ in withAnimation(Motion.standard) { proxy.scrollTo(ChatTranscript.bottom, anchor: .bottom) } }
+            .onChange(of: assistant.key) { _, _ in proxy.scrollTo(ChatTranscript.bottom, anchor: .bottom) }
+            .onAppear { proxy.scrollTo(ChatTranscript.bottom, anchor: .bottom) }
         }
     }
 
-    private var suggestions: some View {
+    static let bottom = "bottom"
+}
+
+private struct ChatSuggestions: View {
+    @Environment(DataStore.self) private var store
+    @Environment(Assistant.self) private var assistant
+
+    var body: some View {
         let scoped = store.module(assistant.scopeModuleID)
         let items: [(String, String)] = scoped.map { m in [
             ("questionmark.bubble", "Frag mich zu \(m.name) ab"),
@@ -114,15 +130,16 @@ struct AssistantPanel: View {
             ("person.badge.clock", "Ich arbeite Di und Do 9–17 Uhr als Werkstudent – trag das ein"),
             ("plus.rectangle.on.folder", "Hilf mir, mein Semester einzurichten")
         ]
-        return VStack(alignment: .leading, spacing: 10) {
-            Text(scoped == nil ? "Wobei kann ich helfen?" : "Lernen mit \(scoped!.name)")
-                .font(.system(size: 20, weight: .bold)).tracking(-0.3)
+        VStack(alignment: .leading, spacing: 10) {
+            Text(scoped.map { "Lernen mit \($0.name)" } ?? "Wobei kann ich helfen?")
+                .scaledFont(size: 20, weight: .bold).tracking(-0.3)
+                .accessibilityAddTraits(.isHeader)
             Text("Ich kann deinen Kalender, deine Module, Fristen und Materialien direkt bearbeiten.")
                 .font(.callout).foregroundStyle(.secondary)
             ForEach(items, id: \.1) { icon, text in
                 Button { assistant.send(text) } label: {
                     HStack(spacing: 10) {
-                        Image(systemName: icon).foregroundStyle(Color.accentColor).frame(width: 20)
+                        Image(systemName: icon).foregroundStyle(Color.accentColor).frame(width: 20).accessibilityHidden(true)
                         Text(text).font(.callout).multilineTextAlignment(.leading)
                         Spacer(minLength: 0)
                     }
@@ -134,27 +151,40 @@ struct AssistantPanel: View {
         }
         .padding(.top, 8)
     }
+}
 
-    private var liveView: some View {
+/// Die gerade entstehende Antwort – liest als einzige View den Stream.
+private struct LiveReply: View {
+    @Environment(Assistant.self) private var assistant
+    let proxy: ScrollViewProxy
+
+    var body: some View {
+        let text = assistant.live?.content ?? ""
         VStack(alignment: .leading, spacing: 8) {
-            if let text = assistant.live?.content, !text.isEmpty {
+            if !text.isEmpty {
                 MarkdownView(text: text)
             }
             if assistant.confirmation == nil {
                 HStack(spacing: 8) {
                     TypingDots()
-                    Text(assistant.activity ?? ((assistant.live?.content.isEmpty ?? true) ? "Denkt nach …" : "Schreibt …"))
+                    Text(assistant.activity ?? (text.isEmpty ? "Denkt nach …" : "Schreibt …"))
                         .font(.caption).foregroundStyle(.secondary)
                         .contentTransition(.opacity)
                 }
             }
         }
+        .onChange(of: text.count) { _, _ in proxy.scrollTo(ChatTranscript.bottom, anchor: .bottom) }
     }
+}
 
-    private func confirmationCard(_ c: Assistant.Confirmation) -> some View {
+private struct ConfirmationCard: View {
+    @Environment(Assistant.self) private var assistant
+    let confirmation: Assistant.Confirmation
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label(c.title, systemImage: "hand.raised.fill").font(.system(size: 13, weight: .semibold)).foregroundStyle(.orange)
-            Text(c.detail).font(.callout).foregroundStyle(.secondary)
+            Label(confirmation.title, systemImage: "hand.raised.fill").scaledFont(size: 13, weight: .semibold).foregroundStyle(.orange)
+            Text(confirmation.detail).font(.callout).foregroundStyle(.secondary)
             HStack {
                 Spacer()
                 Button("Ablehnen") { assistant.resolve(false) }
@@ -166,12 +196,19 @@ struct AssistantPanel: View {
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.orange.opacity(0.35)))
         .transition(.scale(scale: 0.96, anchor: .bottom).combined(with: .opacity))
     }
+}
 
-    // MARK: Eingabe
+// MARK: Eingabe
 
-    private var inputBar: some View {
+private struct ChatInputBar: View {
+    @Environment(DataStore.self) private var store
+    @Environment(Assistant.self) private var assistant
+    @FocusState private var inputFocused: Bool
+
+    var body: some View {
         @Bindable var assistant = assistant
-        return HStack(alignment: .bottom, spacing: 8) {
+        let canSend = !assistant.draft.trimmed.isEmpty
+        HStack(alignment: .bottom, spacing: 8) {
             TextField(assistant.scopeModuleID == nil ? "Frag Kompass …" : "Frag zu \(store.module(assistant.scopeModuleID)?.name ?? "diesem Modul") …",
                       text: $assistant.draft, axis: .vertical)
                 .textFieldStyle(.plain)
@@ -185,17 +222,19 @@ struct AssistantPanel: View {
             Button {
                 if assistant.isRunning { assistant.stop() } else { assistant.send(assistant.draft) }
             } label: {
-                Image(systemName: assistant.isRunning ? "stop.circle.fill" : "arrow.up.circle.fill")
-                    .font(.system(size: 26))
-                    .foregroundStyle(assistant.isRunning || !assistant.draft.trimmed.isEmpty ? Color.accentColor : Color.secondary.opacity(0.5))
+                Label(assistant.isRunning ? "Stoppen" : "Senden", systemImage: assistant.isRunning ? "stop.circle.fill" : "arrow.up.circle.fill")
+                    .labelStyle(.iconOnly)
+                    .scaledFont(size: 26)
+                    .foregroundStyle(assistant.isRunning || canSend ? Color.accentColor : Color.secondary.opacity(0.5))
                     .contentTransition(.symbolEffect(.replace))
             }
             .buttonStyle(.pressable)
-            .disabled(!assistant.isRunning && assistant.draft.trimmed.isEmpty)
+            .disabled(!assistant.isRunning && !canSend)
             .help(assistant.isRunning ? "Stoppen" : "Senden (Enter)")
         }
         .padding(12)
         .background(.bar)
+        .onAppear { inputFocused = true }
     }
 }
 
@@ -229,7 +268,7 @@ struct MessageView: View {
             HStack {
                 Spacer(minLength: 40)
                 Text(message.content)
-                    .font(.system(size: 13.5))
+                    .scaledFont(size: 13.5)
                     .textSelection(.enabled)
                     .padding(.horizontal, 12).padding(.vertical, 8)
                     .foregroundStyle(.white)
@@ -243,7 +282,7 @@ struct MessageView: View {
             HStack(spacing: 8) {
                 Image(systemName: message.isError == true ? "exclamationmark.circle" : "checkmark.circle.fill")
                     .foregroundStyle(message.isError == true ? Color.orange : Color.green)
-                    .font(.system(size: 12))
+                    .scaledFont(size: 12)
                 Text(message.summary ?? ToolDefinitions.activityLabel(message.toolName ?? ""))
                     .font(.caption).foregroundStyle(.secondary).lineLimit(2)
                 Spacer(minLength: 0)
@@ -284,6 +323,19 @@ struct MessageView: View {
                 app.selection = .calendar
             }
         }
+    }
+}
+
+/// DeepSeek ist aus (Entwicklung): Der Chat braucht es, Lernmaterial kommt von Claude.
+struct AssistantPausedCard: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Chat-Assistent pausiert", systemImage: "pause.circle").font(.headline)
+            Text("Der Chat läuft über DeepSeek, das gerade ausgeschaltet ist. Karteikarten, Zusammenfassungen und Quizze erstellt Claude über dein Abo – im Modul unter Lernen.")
+                .font(.callout).foregroundStyle(.secondary)
+            OpenSettingsButton(title: "In den Einstellungen einschalten …")
+        }
+        .card()
     }
 }
 

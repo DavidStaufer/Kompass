@@ -35,7 +35,7 @@ struct LogWorkSheet: View {
                 Section {
                     LabeledContent("Wofür") {
                         HStack {
-                            Picker("", selection: $target) {
+                            Picker("Wofür", selection: $target) {
                                 Section("Studium") {
                                     ForEach(moduleTargets, id: \.self) { t in Text(store.label(for: t).name).tag(t) }
                                 }
@@ -47,7 +47,7 @@ struct LogWorkSheet: View {
                                 }
                             }
                             .labelsHidden()
-                            Button { showNewCategory = true } label: { Image(systemName: "plus") }
+                            Button { showNewCategory = true } label: { Label("Neue Kategorie", systemImage: "plus").labelStyle(.iconOnly) }
                                 .help("Neue Kategorie (z. B. Sport, Haushalt)")
                                 .popover(isPresented: $showNewCategory) { newCategoryPopover.compactPopover() }
                         }
@@ -63,7 +63,7 @@ struct LogWorkSheet: View {
                 Section {
                     LabeledContent("Erfasste Zeit") {
                         VStack(alignment: .trailing, spacing: 2) {
-                            TextField("", text: $durationText, prompt: Text("z. B. 1h 30m"))
+                            TextField("Erfasste Zeit", text: $durationText, prompt: Text("z. B. 1h 30m"))
                                 .labelsHidden()
                                 .multilineTextAlignment(.trailing)
                                 .frame(maxWidth: 160)

@@ -40,6 +40,21 @@ enum MaterialImporter {
         return added
     }
 
+    /// Übernimmt eine heruntergeladene Datei (z. B. aus WueCampus) als Material.
+    static func importDownloaded(_ tmp: URL, fileName: String, title: String, kind: MaterialKind, moduleID: UUID,
+                                 sourceKey: String, sourceModified: Date, store: DataStore) {
+        let id = UUID()
+        let ext = (fileName as NSString).pathExtension.lowercased()
+        var mat = Material(id: id, title: title, kind: kind, fileName: ext.isEmpty ? id.uuidString : "\(id.uuidString).\(ext)", originalName: fileName)
+        mat.lectureNumber = lectureNumber(in: title) ?? lectureNumber(in: (fileName as NSString).deletingPathExtension)
+        mat.sourceKey = sourceKey
+        mat.sourceModified = sourceModified
+        let dest = Paths.materialFile(moduleID, mat)
+        do { try FileManager.default.moveItem(at: tmp, to: dest) } catch { try? FileManager.default.copyItem(at: tmp, to: dest) }
+        store.updateModule(moduleID) { $0.materials.append(mat) }
+        extract(materialID: id, moduleID: moduleID, file: dest, store: store)
+    }
+
     /// Fügt einen Text (z. B. eingefügte Notizen) als Material hinzu.
     static func addText(_ text: String, title: String, kind: MaterialKind, moduleID: UUID, store: DataStore) -> Material {
         let id = UUID()
