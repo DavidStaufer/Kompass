@@ -58,7 +58,7 @@ struct DeadlinesView: View {
                         VStack(spacing: 0) { ForEach(Array(done)) { DeadlineRow(deadline: $0) } }
                             .padding(.top, 6)
                     } label: {
-                        Text("Erledigt (\(done.count))").font(.system(size: 15, weight: .semibold))
+                        Text("Erledigt (\(done.count))").scaledFont(size: 15, weight: .semibold)
                     }
                 }
             }
@@ -75,7 +75,7 @@ struct DeadlinesView: View {
     private func group(_ title: String, _ items: [Deadline], tint: Color = .primary) -> some View {
         if !items.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Text(title).font(.system(size: 15, weight: .semibold)).foregroundStyle(tint)
+                Text(title).scaledFont(size: 15, weight: .semibold).foregroundStyle(tint)
                 VStack(spacing: 0) {
                     ForEach(items) { d in
                         DeadlineRow(deadline: d)
@@ -96,15 +96,16 @@ struct FilterChip: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 4) {
-                if let symbol { Image(systemName: symbol).font(.system(size: 10)) }
+                if let symbol { Image(systemName: symbol).scaledFont(size: 10).accessibilityHidden(true) }
                 Text(label)
             }
-            .font(.system(size: 12, weight: .medium))
+            .scaledFont(size: 12, weight: .medium)
             .padding(.horizontal, 10).padding(.vertical, 5)
             .background(Capsule().fill(selected ? Color.accentColor : Color.subtleFill))
             .foregroundStyle(selected ? Color.white : Color.primary)
         }
         .buttonStyle(.pressable)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 
@@ -116,37 +117,71 @@ struct DeadlineRow: View {
     var body: some View {
         let d = deadline
         let m = store.module(d.moduleID)
-        let days = Date().daysUntil(d.date)
         HStack(spacing: 12) {
             Button {
                 withAnimation(Motion.momentum) { app.toggleDeadline(d.id) }
             } label: {
-                Image(systemName: d.done ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 18))
+                Label(d.done ? "Als offen markieren" : "Als erledigt markieren", systemImage: d.done ? "checkmark.circle.fill" : "circle")
+                    .labelStyle(.iconOnly)
+                    .scaledFont(size: 18)
                     .foregroundStyle(d.done ? .green : .secondary)
                     .contentTransition(.symbolEffect(.replace))
             }
             .buttonStyle(.pressable)
             .help(d.done ? "Als offen markieren" : "Als erledigt markieren")
 
+            Button { app.sheet = .deadline(d.id, moduleID: nil, kind: nil) } label: {
+                DeadlineRowContent(deadline: d, module: m)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 10).padding(.vertical, 9)
+        .contextMenu {
+            Button("Bearbeiten …") { app.sheet = .deadline(d.id, moduleID: nil, kind: nil) }
+            Button("Zeit buchen …") { app.sheet = .logWork(LogPreset(deadlineID: d.id)) }
+            if let s = d.sourceURL, let url = URL(string: s) {
+                Button("In WueCampus öffnen") { Platform.open(url) }
+            }
+            if let m, d.kind == .klausur {
+                Button("Lernplan bis zur Klausur erstellen") { app.sheet = .generator(.studyPlan, m.id, []) }
+            }
+            Button(d.done ? "Als offen markieren" : "Erledigt") { app.toggleDeadline(d.id) }
+            Divider()
+            Button("Löschen", role: .destructive) { app.deleteDeadline(d.id) }
+        }
+    }
+}
+
+/// Inhalt einer Fristzeile (ohne Abhak-Knopf) – Label des Bearbeiten-Buttons.
+private struct DeadlineRowContent: View {
+    @Environment(DataStore.self) private var store
+    let deadline: Deadline
+    let module: Module?
+
+    var body: some View {
+        let d = deadline
+        let days = Date().daysUntil(d.date)
+        HStack(spacing: 12) {
             Image(systemName: d.kind.symbol)
-                .font(.system(size: 13))
+                .scaledFont(size: 13)
                 .foregroundStyle(d.kind.tint)
                 .frame(width: 26, height: 26)
                 .background(Circle().fill(d.kind.tint.opacity(0.12)))
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(d.title).font(.system(size: 13, weight: .semibold)).strikethrough(d.done)
+                Text(d.title).scaledFont(size: 13, weight: .semibold).strikethrough(d.done)
                 HStack(spacing: 6) {
                     Text(d.kind.label)
-                    if let m { Text("·"); ModuleDot(color: m.color.color, size: 6); Text(m.name) }
+                    if let m = module { Text("·"); ModuleDot(color: m.color.color, size: 6); Text(m.name) }
                     if !d.location.isEmpty { Text("· \(d.location)") }
+                    if d.sourceKey != nil { Text("· WueCampus") }
                 }
                 .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
-                Text(Fmt.dateTime(d.date, allDay: d.allDay)).font(.system(size: 12, weight: .medium))
+                Text(Fmt.dateTime(d.date, allDay: d.allDay)).scaledFont(size: 12, weight: .medium)
                 let logged = store.logged(deadlineID: d.id)
                 if logged > 0 {
                     Text("\(Fmt.jira(logged)) von \(Fmt.jira(Int(d.effectivePrepHours * 60))) vorbereitet")
@@ -159,24 +194,12 @@ struct DeadlineRow: View {
                 }
             }
             HStack(spacing: 3) {
-                if d.eventIdentifier != nil { Image(systemName: "calendar").help("Im Kalender") }
-                if d.reminderIdentifier != nil { Image(systemName: "checklist").help("In Erinnerungen") }
+                if d.eventIdentifier != nil { Image(systemName: "calendar").help("Im Kalender").accessibilityLabel("Im Kalender") }
+                if d.reminderIdentifier != nil { Image(systemName: "checklist").help("In Erinnerungen").accessibilityLabel("In Erinnerungen") }
             }
-            .font(.system(size: 10)).foregroundStyle(.tertiary)
+            .scaledFont(size: 10).foregroundStyle(.tertiary)
         }
-        .padding(.horizontal, 10).padding(.vertical, 9)
         .contentShape(Rectangle())
-        .onTapGesture { app.sheet = .deadline(d.id, moduleID: nil, kind: nil) }
-        .contextMenu {
-            Button("Bearbeiten …") { app.sheet = .deadline(d.id, moduleID: nil, kind: nil) }
-            Button("Zeit buchen …") { app.sheet = .logWork(LogPreset(deadlineID: d.id)) }
-            if let m, d.kind == .klausur {
-                Button("Lernplan bis zur Klausur erstellen") { app.sheet = .generator(.studyPlan, m.id, []) }
-            }
-            Button(d.done ? "Als offen markieren" : "Erledigt") { app.toggleDeadline(d.id) }
-            Divider()
-            Button("Löschen", role: .destructive) { app.deleteDeadline(d.id) }
-        }
     }
 }
 
@@ -220,8 +243,8 @@ struct DeadlineEditor: View {
                 if d.kind != .anmeldung {
                     LabeledContent("Vorbereitung") {
                         HStack {
-                            Slider(value: Binding(get: { d.prepHours ?? d.kind.defaultPrepHours }, set: { d.prepHours = $0.rounded() }), in: 0...60, step: 1)
-                            Text("\(Int(d.prepHours ?? d.kind.defaultPrepHours)) h").monospacedDigit().frame(width: 40, alignment: .trailing)
+                            Slider(value: $d.effectivePrepHours, in: 0...60, step: 1)
+                            Text("\(Int(d.effectivePrepHours)) h").monospacedDigit().frame(width: 40, alignment: .trailing)
                         }
                     }
                     .help("Der Wochenplaner reserviert entsprechend Lernzeit vor der Frist.")

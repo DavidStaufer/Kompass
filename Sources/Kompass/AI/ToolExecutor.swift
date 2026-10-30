@@ -127,6 +127,7 @@ struct ToolExecutor {
         case "list_unconfirmed": return listUnconfirmed(args)
         case "confirm_attendance": return confirmAttendance(args)
         case "create_time_category": return createCategory(args)
+        case "sync_wuecampus": return await syncWue()
         case "get_week_review": return weekReview(args)
         case "plan_study_blocks": return planBlocks(args)
         case "clear_study_blocks": return clearBlocks(args)
@@ -744,6 +745,14 @@ struct ToolExecutor {
         }
         return ok(["anzahl": chosen.count, "gebucht": Fmt.jira(minutes)],
                   attended ? "\(chosen.count) Termine bestätigt (\(Fmt.jira(minutes)))" : "\(chosen.count) Termine als nicht wahrgenommen markiert")
+    }
+
+    private func syncWue() async -> ToolOutcome {
+        guard app.wue.isConnected else { return fail("WueCampus ist nicht verbunden. Der Nutzer muss sich in den Einstellungen → WueCampus anmelden.") }
+        guard !app.wue.linkedModules.isEmpty else { return fail("Es sind noch keine WueCampus-Kurse Modulen zugeordnet (Einstellungen → WueCampus → Kurse zuordnen).") }
+        guard let r = await app.wue.sync(manual: false) else { return fail(app.wue.lastError ?? "Synchronisierung läuft bereits.") }
+        return ok(["neue_dateien": r.newFiles, "aktualisierte_dateien": r.updatedFiles, "neue_fristen": r.newDeadlines,
+                   "geaenderte_fristen": r.updatedDeadlines, "fehler": r.errors], "WueCampus: \(r.summary)")
     }
 
     private func createCategory(_ a: ToolArgs) -> ToolOutcome {

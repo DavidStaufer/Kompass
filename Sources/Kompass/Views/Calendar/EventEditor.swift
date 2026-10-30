@@ -25,6 +25,8 @@ struct EventEditor: View {
     @State private var error: String?
     @State private var confirmDelete = false
 
+    /// Start, Ende und Modul sind bewusst nur Startwerte: Das Sheet entsteht pro Aufruf neu
+    /// und bearbeitet danach seinen eigenen Zustand.
     init(eventID: String?, start: Date, end: Date, moduleID: UUID?) {
         self.eventID = eventID
         _start = State(initialValue: start)

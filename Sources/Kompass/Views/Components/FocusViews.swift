@@ -57,13 +57,14 @@ struct FocusRunningView: View {
             ZStack {
                 ProgressRing(value: timer.targetMinutes >= 8 * 60 ? 0 : timer.progress, color: l.color, lineWidth: compact ? 3 : 4, size: compact ? 30 : 40)
                 Image(systemName: timer.isOvertime ? "checkmark" : (timer.kind == .module ? "brain.head.profile" : l.symbol))
-                    .font(.system(size: compact ? 11 : 14, weight: .semibold))
+                    .scaledFont(size: compact ? 11 : 14, weight: .semibold)
                     .foregroundStyle(l.color)
+                    .accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: 1) {
-                Text(task?.title ?? l.name).font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                Text(task?.title ?? l.name).scaledFont(size: 12, weight: .semibold).lineLimit(1)
                 Text(timer.display)
-                    .font(.system(size: compact ? 15 : 20, weight: .semibold, design: .rounded).monospacedDigit())
+                    .scaledFont(size: compact ? 15 : 20, weight: .semibold, design: .rounded).monospacedDigit()
                     .foregroundStyle(timer.isOvertime ? .green : .primary)
                     .contentTransition(.numericText())
             }
@@ -71,7 +72,7 @@ struct FocusRunningView: View {
             Button {
                 timer.stop(save: true)
             } label: {
-                Image(systemName: "stop.fill")
+                Label("Beenden und speichern", systemImage: "stop.fill").labelStyle(.iconOnly)
             }
             .buttonStyle(.borderless)
             .help("Beenden und Lernzeit speichern")

@@ -21,6 +21,7 @@ struct AttendanceSection: View {
                 HStack(spacing: 8) {
                     Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
                         .symbolEffect(.bounce, value: log.id)
+                        .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 0) {
                         Text("Wahrgenommen · \(Fmt.duration(log.minutes))").font(.callout.weight(.semibold))
                         Text("\(l.name) · \(log.activity.label)").font(.caption).foregroundStyle(.secondary)
@@ -151,25 +152,30 @@ struct ConfirmCard: View {
                     HStack(spacing: 10) {
                         Image(systemName: item.source == .workBlock ? "briefcase" : item.activity.symbol)
                             .foregroundStyle(l.color).frame(width: 18)
+                            .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(item.title).font(.system(size: 13, weight: .medium)).lineLimit(1)
+                            Text(item.title).scaledFont(size: 13, weight: .medium).lineLimit(1)
                             Text("\(item.start.isToday ? "Heute" : Fmt.dayShort(item.start)), \(Fmt.time(item.start))–\(Fmt.time(item.end)) · \(l.name)")
                                 .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                         }
                         Spacer()
                         if !compact { Text(Fmt.jira(item.minutes)).font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
-                        Button { withAnimation(Motion.momentum) { _ = app.confirm(item) } } label: { Image(systemName: "checkmark") }
-                            .buttonStyle(.borderedProminent).tint(.green)
-                            .help("Wahrgenommen")
-                        Button { withAnimation(Motion.standard) { app.skip(item) } } label: { Image(systemName: "xmark") }
-                            .help("Nicht wahrgenommen")
+                        Button { withAnimation(Motion.momentum) { _ = app.confirm(item) } } label: {
+                            Label("Wahrgenommen", systemImage: "checkmark").labelStyle(.iconOnly)
+                        }
+                        .buttonStyle(.borderedProminent).tint(.green)
+                        .help("Wahrgenommen")
+                        Button { withAnimation(Motion.standard) { app.skip(item) } } label: {
+                            Label("Nicht wahrgenommen", systemImage: "xmark").labelStyle(.iconOnly)
+                        }
+                        .help("Nicht wahrgenommen")
                         Menu {
                             Button("Mit anderer Dauer buchen …") {
                                 app.sheet = .logWork(LogPreset(target: item.target, activity: item.activity, deadlineID: item.deadlineID,
                                                                start: item.start, minutes: item.minutes, title: item.title,
                                                                eventKey: item.key, blockID: item.blockID, source: item.source))
                             }
-                        } label: { Image(systemName: "ellipsis") }
+                        } label: { Label("Weitere Aktionen", systemImage: "ellipsis").labelStyle(.iconOnly) }
                             .plainMenu()
                     }
                     .controlSize(.small)

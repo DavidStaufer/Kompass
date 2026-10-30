@@ -46,7 +46,7 @@ enum Platform {
 
     static func activateApp() {
         #if os(macOS)
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate()
         #endif
     }
 
@@ -99,6 +99,7 @@ extension Color {
 
 // MARK: - Kompakte Darstellung (iPhone)
 
+// Bewusst ohne `@Entry`: Der Build mit den Command Line Tools (build.sh) hat kein SwiftUI-Makro-Plugin.
 private struct CompactLayoutKey: EnvironmentKey {
     static let defaultValue = false
 }
@@ -184,7 +185,7 @@ extension View {
     @ViewBuilder
     func plainMenu(indicator: Bool = false) -> some View {
         #if os(macOS)
-        self.menuStyle(.borderlessButton).menuIndicator(indicator ? .visible : .hidden).fixedSize()
+        self.menuStyle(.button).buttonStyle(.borderless).menuIndicator(indicator ? .visible : .hidden).fixedSize()
         #else
         self.menuIndicator(indicator ? .visible : .hidden).fixedSize()
         #endif
@@ -214,7 +215,11 @@ extension View {
     @ViewBuilder
     func resizeCursor() -> some View {
         #if os(macOS)
-        self.onHover { inside in if inside { NSCursor.resizeUpDown.push() } else { NSCursor.pop() } }
+        if #available(macOS 15, *) {
+            self.pointerStyle(.frameResize(position: .bottom))
+        } else {
+            self.onHover { inside in if inside { NSCursor.resizeUpDown.push() } else { NSCursor.pop() } }
+        }
         #else
         self
         #endif

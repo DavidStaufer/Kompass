@@ -15,6 +15,12 @@ struct Term: Identifiable, Codable, Hashable {
     /// Ende der Vorlesungszeit (danach meist Prüfungsphase).
     var lectureEnd: Date?
 
+    /// Vorlesungsende für Eingaben – ohne eigenen Wert das Semesterende.
+    var lectureEndOrEnd: Date {
+        get { lectureEnd ?? end }
+        set { lectureEnd = newValue }
+    }
+
     func contains(_ date: Date) -> Bool { date >= start && date <= end.adding(days: 1) }
 
     /// Schlägt ein Semester passend zum Datum vor (deutsche Hochschulen: WiSe Okt–März, SoSe Apr–Sep).
@@ -237,6 +243,9 @@ struct Material: Identifiable, Codable, Hashable {
     var topicIDs: [UUID] = []
     var lectureNumber: Int?
     var usedOCR: Bool?
+    /// Herkunft bei automatisch übernommenen Dateien (z. B. „wue:file:123:/Folien.pdf“)
+    var sourceKey: String?
+    var sourceModified: Date?
 
     var fileExtension: String { (fileName as NSString).pathExtension.lowercased() }
 }
@@ -257,6 +266,9 @@ struct Module: Identifiable, Codable, Hashable {
     var archived: Bool = false
     var createdAt = Date()
     var targetGrade: String?
+    /// Verknüpfter WueCampus-(Moodle-)Kurs
+    var wueCourseID: Int?
+    var wueCourseName: String?
 
     var displayCode: String { code.isEmpty ? String(name.prefix(3)).uppercased() : code }
 
@@ -353,9 +365,16 @@ struct Deadline: Identifiable, Codable, Hashable {
     var reminderIdentifier: String?
     var eventExternalID: String?
     var reminderExternalID: String?
+    /// Herkunft bei automatisch übernommenen Terminen (z. B. „wue:assign:42“)
+    var sourceKey: String?
+    var sourceModified: Date?
+    var sourceURL: String?
     var createdAt = Date()
 
-    var effectivePrepHours: Double { prepHours ?? kind.defaultPrepHours }
+    var effectivePrepHours: Double {
+        get { prepHours ?? kind.defaultPrepHours }
+        set { prepHours = newValue.rounded() }
+    }
 }
 
 struct TaskItem: Identifiable, Codable, Hashable {
@@ -495,7 +514,7 @@ struct Quiz: Identifiable, Codable, Hashable {
 }
 
 enum DocKind: String, Codable, CaseIterable, Identifiable {
-    case zusammenfassung, probeklausur, lernplan, notiz, erklaerung, wochenfazit
+    case zusammenfassung, probeklausur, lernplan, notiz, erklaerung, wochenfazit, spickzettel, pflichtwissen
     var id: String { rawValue }
     var label: String {
         switch self {
@@ -505,6 +524,8 @@ enum DocKind: String, Codable, CaseIterable, Identifiable {
         case .notiz: return "Notiz"
         case .erklaerung: return "Erklärung"
         case .wochenfazit: return "Wochenfazit"
+        case .spickzettel: return "Cheat Sheet"
+        case .pflichtwissen: return "Das musst du können"
         }
     }
     var symbol: String {
@@ -515,10 +536,21 @@ enum DocKind: String, Codable, CaseIterable, Identifiable {
         case .notiz: return "note.text"
         case .erklaerung: return "lightbulb"
         case .wochenfazit: return "calendar.badge.checkmark"
+        case .spickzettel: return "doc.plaintext"
+        case .pflichtwissen: return "target"
         }
     }
+
+    /// Unbekannte Arten (aus einer neueren App-Version) werden zur Notiz, statt die Daten unlesbar zu machen.
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = DocKind(rawValue: raw) ?? .notiz
+    }
+
     static func parse(_ s: String?) -> DocKind {
         let s = (s ?? "").lowercased()
+        if s.hasPrefix("cheat") || s.hasPrefix("spick") { return .spickzettel }
+        if s.hasPrefix("pflicht") || s.hasPrefix("must") || s.contains("können") { return .pflichtwissen }
         if s.hasPrefix("zus") || s.hasPrefix("sum") { return .zusammenfassung }
         if s.hasPrefix("probe") || s.hasPrefix("mock") || s.contains("klausur") || s.contains("exam") { return .probeklausur }
         if s.contains("plan") { return .lernplan }
@@ -563,6 +595,15 @@ struct Preferences: Codable, Equatable {
     /// Titel des Arbeitskalenders (geräteübergreifend; die ID ist pro Gerät verschieden)
     var workCalendarTitle: String? = nil
     var hiddenCalendarIDs: [String] = []
+
+    /// Sichtbarkeit eines Kalenders – als Key-Path für Schalter (`$prefs[calendarVisible: id]`).
+    subscript(calendarVisible id: String) -> Bool {
+        get { !hiddenCalendarIDs.contains(id) }
+        set {
+            if newValue { hiddenCalendarIDs.removeAll { $0 == id } }
+            else if !hiddenCalendarIDs.contains(id) { hiddenCalendarIDs.append(id) }
+        }
+    }
     var blockAlarmMinutes: Int = 5
 
     // Erinnerungen
@@ -582,6 +623,33 @@ struct Preferences: Codable, Equatable {
 
     var lastReviewDismissedWeek: Date? = nil
     var defaultFocusMinutes: Int = 50
+
+    // WueCampus
+    var wueSyncFiles: Bool = true
+    var wueSyncAssignments: Bool = true
+    var wueSyncEvents: Bool = true
+    var wueMaxFileMB: Int = 100
+    /// Übernommene Einträge, die du gelöscht hast – werden nicht erneut angelegt
+    var wueIgnoredKeys: [String] = []
+    var wueLastSync: Date? = nil
+
+    // Claude (über das Claude-Abo statt API) – liest auch das Skript `Scripts/kompass_claude.py`
+    /// Neue Materialien beim täglichen Durchlauf automatisch aufbereiten
+    var claudeAuto: Bool = true
+    var claudeCards: Bool = true
+    /// Karteikarten je Vorlesung und je Übung – mehr nur auf Wunsch
+    var claudeCardsPerLecture: Int = 10
+    var claudeSummaries: Bool = true
+    var claudeQuizzes: Bool = true
+    var claudeMockExams: Bool = true
+    var claudeCheatSheets: Bool = true
+    var claudeMustKnow: Bool = true
+    /// Früheres Limit (ersetzt durch `claudeBatchLimit`)
+    var claudeMaxPerRun: Int = 4
+    /// Höchstens so viele Pakete pro Durchlauf – hoch genug, dass alles Neue am selben Tag fertig wird
+    var claudeBatchLimit: Int = 50
+    /// Probeklausuren, Cheat Sheets und „Das musst du können“ mit Sonnet statt Haiku
+    var claudeBetterModel: Bool = true
 
     // Zeiterfassung
     var workWeeklyLimitHours: Double = 20

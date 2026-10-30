@@ -23,7 +23,7 @@ struct QuizRunner: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(quiz.title).font(.system(size: 17, weight: .bold))
+                        Text(quiz.title).scaledFont(size: 17, weight: .bold)
                         Text(store.module(quiz.moduleID)?.name ?? "").font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -58,10 +58,11 @@ struct QuizRunner: View {
                     MarkdownView(text: q.prompt, baseSize: 16)
                     if q.type == .single {
                         VStack(spacing: 8) {
+                            // Feste Antwortliste je Frage – die Position (A, B, C …) ist hier die Identität.
                             ForEach(q.options.indices, id: \.self) { i in optionButton(q, i, isRevealed: isRevealed) }
                         }
                     } else {
-                        TextEditor(text: Binding(get: { openAnswers[index] ?? "" }, set: { openAnswers[index] = $0 }))
+                        TextEditor(text: $openAnswers[index, or: ""])
                             .font(.body)
                             .frame(minHeight: 110)
                             .scrollContentBackground(.hidden)
@@ -117,13 +118,13 @@ struct QuizRunner: View {
         } label: {
             HStack(alignment: .top, spacing: 10) {
                 Text(["A", "B", "C", "D", "E", "F"][min(i, 5)])
-                    .font(.system(size: 12, weight: .bold))
+                    .scaledFont(size: 12, weight: .bold)
                     .frame(width: 22, height: 22)
                     .background(Circle().fill(tint == .clear ? Color.primary.opacity(0.08) : tint.opacity(0.25)))
                 Text(q.options[i]).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
-                if isRevealed && correct { Image(systemName: "checkmark.circle.fill").foregroundStyle(.green) }
-                if isRevealed && picked && !correct { Image(systemName: "xmark.circle.fill").foregroundStyle(.red) }
+                if isRevealed && correct { Image(systemName: "checkmark.circle.fill").foregroundStyle(.green).accessibilityHidden(true) }
+                if isRevealed && picked && !correct { Image(systemName: "xmark.circle.fill").foregroundStyle(.red).accessibilityHidden(true) }
             }
             .padding(12)
             .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(tint == .clear ? Color.subtleFill : tint.opacity(0.1)))
@@ -131,6 +132,7 @@ struct QuizRunner: View {
         }
         .buttonStyle(.pressable)
         .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")), modifiers: [])
+        .accessibilityValue(isRevealed ? (correct ? "richtig" : (picked ? "falsch" : "")) : (picked ? "gewählt" : ""))
     }
 
     private func revealBox(_ q: QuizQuestion) -> some View {
@@ -170,7 +172,7 @@ struct QuizRunner: View {
             VStack(spacing: 18) {
                 ZStack {
                     ProgressRing(value: score, color: score >= 0.8 ? .green : (score >= 0.5 ? .orange : .red), lineWidth: 10, size: 120)
-                    Text(Fmt.percent(score)).font(.system(size: 28, weight: .bold, design: .rounded))
+                    Text(Fmt.percent(score)).scaledFont(size: 28, weight: .bold, design: .rounded)
                 }
                 .padding(.top, 20)
                 Text(score >= 0.85 ? "Stark! Das sitzt." : (score >= 0.6 ? "Gute Basis – dranbleiben." : "Da geht noch was – wiederhole die schwachen Themen."))

@@ -1,11 +1,11 @@
 #!/bin/zsh
 # Baut Kompass.app. Aufruf:
-#   ./build.sh           → build/Kompass.app
+#   ./build.sh           → build.noindex/Kompass.app (".noindex": taucht nicht als zweite App in Spotlight/Launchpad auf)
 #   ./build.sh install   → zusätzlich nach /Applications kopieren
 set -euo pipefail
 cd "$(dirname "$0")"
 
-APP="build/Kompass.app"
+APP="build.noindex/Kompass.app"
 ICONSET="build/AppIcon.iconset"
 
 echo "▸ Kompiliere (Release) …"
@@ -25,13 +25,24 @@ fi
 echo "▸ Erstelle App-Bundle …"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 cp .build/arm64-apple-macosx/release/Kompass "$APP/Contents/MacOS/Kompass"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 printf "APPL????" > "$APP/Contents/PkgInfo"
 
-echo "▸ Signiere (ad hoc) …"
-codesign --force --sign - --timestamp=none "$APP"
+# Mit festem Entwickler-Zertifikat signieren (falls vorhanden): Dann bleibt „Immer erlauben“ im
+# Schlüsselbund auch nach Updates gültig. Sonst ad hoc – dann fragt macOS nach jedem Update erneut.
+IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Apple Development|Developer ID Application/ {print $2; exit}')
+if [[ -n "$IDENTITY" ]]; then
+  echo "▸ Signiere mit „$IDENTITY“ …"
+  codesign --force --sign "$IDENTITY" --timestamp=none "$APP"
+else
+  echo "▸ Signiere (ad hoc) …"
+  codesign --force --sign - --timestamp=none "$APP"
+fi
+# Nur /Applications/Kompass.app soll für macOS „die“ App sein
+"$LSREGISTER" -u "$APP" >/dev/null 2>&1 || true
 
 if [[ "${1:-}" == "install" ]]; then
   echo "▸ Installiere nach /Applications …"

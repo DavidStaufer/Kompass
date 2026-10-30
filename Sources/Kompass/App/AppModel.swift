@@ -21,6 +21,7 @@ enum AppSheet: Identifiable {
     case logWork(LogPreset)
     case term(UUID?)
     case onboarding
+    case wueCourses
 
     var id: String {
         switch self {
@@ -38,6 +39,7 @@ enum AppSheet: Identifiable {
         case .logWork(let p): return "log-\(p.idString)"
         case .term(let id): return "term-\(id?.uuidString ?? "new")"
         case .onboarding: return "onboarding"
+        case .wueCourses: return "wueCourses"
         }
     }
 }
@@ -59,6 +61,8 @@ final class AppModel {
     let sync: SyncService
     let timer: FocusTimer
     let assistant: Assistant
+    let wue: WueCampusSync
+    let claude: ClaudeBridge
 
     var selection: SidebarItem? = .today
     var showAssistant = false
@@ -85,7 +89,11 @@ final class AppModel {
         timer.sync = sync
         self.timer = timer
         self.assistant = Assistant()
+        self.wue = WueCampusSync(store: store)
+        self.claude = ClaudeBridge(store: store)
         assistant.app = self
+        wue.app = self
+        claude.app = self
         assistant.load(from: store)
 
         calendar.onExternalChange = { [weak sync] in sync?.reconcile() }
@@ -122,8 +130,10 @@ final class AppModel {
         }
         if Paths.isDemo {
             MaterialImporter.resumePending(store: store)
+            claude.start()
             openDemoSheet(UserDefaults.standard.string(forKey: "kompass.sheet"))
             if UserDefaults.standard.bool(forKey: "kompass.demoConfirm") { confirmAll(pendingConfirmations()) }
+            if UserDefaults.standard.bool(forKey: "kompass.wueSync") { Task { await wue.sync(manual: true) } }
             if let d = UserDefaults.standard.string(forKey: "kompass.calendarDate").flatMap({ Fmt.parse($0) }) { calendarDate = d }
             if let q = UserDefaults.standard.string(forKey: "kompass.ask") {
                 if let base = UserDefaults.standard.string(forKey: "kompass.demoBaseURL") { store.prefs.aiBaseURL = base }
@@ -144,6 +154,8 @@ final class AppModel {
         await calendar.requestAccess()
         calendar.migrateEventKeys(store: store)
         await sync.requestNotificationPermission()
+        wue.start()
+        claude.start()
         MaterialImporter.resumePending(store: store)
         sync.reconcile()
         sync.resyncAll()
@@ -168,6 +180,7 @@ final class AppModel {
         case "generator": if let m { sheet = .generator(.mockExam, m, []) }
         case "cards": sheet = .cardReview(nil)
         case "onboarding": sheet = .onboarding
+        case "wueCourses": sheet = .wueCourses
         case "event": sheet = .newEvent(start: Date().at(minutes: 14 * 60), end: Date().at(minutes: 15 * 60), moduleID: m)
         case "task": sheet = .task(nil, moduleID: m)
         case "logWork": sheet = .logWork(LogPreset(target: m.map { .module($0) }))
@@ -274,6 +287,7 @@ final class AppModel {
 
     func deleteDeadline(_ id: UUID) {
         guard let d = store.deadline(id) else { return }
+        wue.ignore(d.sourceKey)
         sync.remove(deadline: d)
         store.deadlines.removeAll { $0.id == id }
     }

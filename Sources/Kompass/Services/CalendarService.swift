@@ -96,6 +96,11 @@ final class CalendarService {
     @ObservationIgnored let ek = EKEventStore()
     @ObservationIgnored private let store: DataStore
     @ObservationIgnored private var cache: [String: EKEvent] = [:]
+    /// Ergebnisse von `events(from:to:)` je Zeitraum – Views fragen beim Rendern oft dasselbe ab.
+    /// Gilt nur für die aktuelle `revision`; jede Änderung am Kalender leert ihn.
+    @ObservationIgnored private var queryCache: [QueryKey: [CalEvent]] = [:]
+    @ObservationIgnored private var queryCacheRevision = -1
+    private struct QueryKey: Hashable { let start: Date; let end: Date; let calendars: [String] }
     @ObservationIgnored private var observer: NSObjectProtocol?
     /// Wird nach jeder externen Änderung aufgerufen (Abgleich mit Kompass-Objekten).
     @ObservationIgnored var onExternalChange: (() -> Void)?
@@ -261,11 +266,14 @@ final class CalendarService {
     var canShowEvents: Bool { eventsAuthorized || Paths.isDemo }
 
     func events(from start: Date, to end: Date, calendars cals: [EKCalendar]? = nil) -> [CalEvent] {
-        _ = revision
+        let rev = revision
         if Paths.isDemo { return demoEvents(from: start, to: end) }
         guard eventsAuthorized else { return [] }
         let list = cals ?? visibleCalendars
         guard !list.isEmpty, end > start else { return [] }
+        if queryCacheRevision != rev { queryCache.removeAll(); queryCacheRevision = rev }
+        let key = QueryKey(start: start, end: end, calendars: list.map(\.calendarIdentifier))
+        if let hit = queryCache[key] { return hit }
         let pred = ek.predicateForEvents(withStart: start, end: end, calendars: list)
         let evs = ek.events(matching: pred)
         var out: [CalEvent] = []
@@ -275,7 +283,10 @@ final class CalendarService {
             cache[ce.id] = e
             out.append(ce)
         }
-        return out.sorted { $0.start == $1.start ? $0.end > $1.end : $0.start < $1.start }
+        out.sort { $0.start == $1.start ? $0.end > $1.end : $0.start < $1.start }
+        if queryCache.count >= 64 { queryCache.removeAll() }
+        queryCache[key] = out
+        return out
     }
 
     /// Alle Termine (unabhängig von der Sichtbarkeit) – für Planung und Konflikterkennung.

@@ -10,17 +10,15 @@ enum CalendarMode: String, CaseIterable, Identifiable {
 struct CalendarScreen: View {
     @Environment(AppModel.self) private var app
     @Environment(CalendarService.self) private var calendar
-    @AppStorage("calendar.mode") private var regularModeRaw = CalendarMode.week.rawValue
-    @AppStorage("calendar.mode.compact") private var compactModeRaw = CalendarMode.day.rawValue
+    @AppStorage("calendar.mode") private var regularMode = CalendarMode.week
+    @AppStorage("calendar.mode.compact") private var compactMode = CalendarMode.day
     @State private var direction: Edge = .trailing
     @Environment(\.accessibilityReduceMotion) private var reduce
     @Environment(\.isCompactLayout) private var compact
 
-    private var modeRaw: String {
-        get { compact ? compactModeRaw : regularModeRaw }
-        nonmutating set { if compact { compactModeRaw = newValue } else { regularModeRaw = newValue } }
-    }
-    private var mode: CalendarMode { CalendarMode(rawValue: modeRaw) ?? .week }
+    /// iPhone und Mac merken sich ihre Ansicht getrennt.
+    private var modeBinding: Binding<CalendarMode> { compact ? $compactMode : $regularMode }
+    private var mode: CalendarMode { modeBinding.wrappedValue }
 
     var body: some View {
         @Bindable var app = app
@@ -45,10 +43,12 @@ struct CalendarScreen: View {
                     case .week: TimeGridView(days: (0..<7).map { app.calendarDate.startOfWeek.adding(days: $0) })
                     case .month: MonthGridView(month: app.calendarDate.startOfMonth) { day in
                         app.calendarDate = day
-                        withAnimation(Motion.standard) { modeRaw = CalendarMode.week.rawValue }
+                        withAnimation(Motion.standard) { modeBinding.wrappedValue = .week }
                     }
                     }
                 }
+                // Feste Raster: Text wächst mit, aber nur bis die Zellen noch lesbar bleiben.
+                .dynamicTypeSize(...DynamicTypeSize.xxLarge)
                 .id("\(mode.rawValue)-\(periodKey)")
                 .simultaneousGesture(swipeToPage, including: compact ? .all : .subviews)
                 .transition(reduce ? .opacity : .asymmetric(insertion: .move(edge: direction).combined(with: .opacity),
@@ -93,21 +93,21 @@ struct CalendarScreen: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(Fmt.monthYear(app.calendarDate)).font(.system(size: 22, weight: .bold)).tracking(-0.4)
-                    Text(subtitle).font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
+                    Text(Fmt.monthYear(app.calendarDate)).scaledFont(size: 22, weight: .bold).tracking(-0.4)
+                    Text(subtitle).scaledFont(size: 12, weight: .medium).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button { app.sheet = .planner(app.calendarDate.startOfWeek < Date().startOfWeek ? Date().startOfWeek : app.calendarDate.startOfWeek) } label: {
-                    Image(systemName: "wand.and.stars")
+                Button(action: openPlanner) {
+                    Label("Lernblöcke planen", systemImage: "wand.and.stars")
                 }
-                Button {
-                    let s = app.calendarDate.isToday ? Date().at(minutes: (Date().minutesSinceMidnight / 30 + 1) * 30) : app.calendarDate.at(minutes: 10 * 60)
-                    app.sheet = .newEvent(start: s, end: s.adding(minutes: 60), moduleID: nil)
-                } label: { Image(systemName: "plus") }
+                Button(action: newEvent) {
+                    Label("Neuer Termin", systemImage: "plus")
+                }
             }
+            .labelStyle(.iconOnly)
             .font(.title3)
             HStack(spacing: 8) {
-                Picker("Ansicht", selection: Binding(get: { mode }, set: { m in withAnimation(Motion.standard) { modeRaw = m.rawValue } })) {
+                Picker("Ansicht", selection: modeBinding.animation(Motion.standard)) {
                     ForEach(CalendarMode.allCases) { Text($0.label).tag($0) }
                 }
                 .pickerStyle(.segmented)
@@ -124,28 +124,29 @@ struct CalendarScreen: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 0) {
                 Text(Fmt.monthYear(app.calendarDate))
-                    .font(.system(size: 22, weight: .bold)).tracking(-0.4)
-                Text(subtitle).font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
+                    .scaledFont(size: 22, weight: .bold).tracking(-0.4)
+                Text(subtitle).scaledFont(size: 12, weight: .medium).foregroundStyle(.secondary)
             }
             Spacer()
-            Button { app.sheet = .planner(app.calendarDate.startOfWeek < Date().startOfWeek ? Date().startOfWeek : app.calendarDate.startOfWeek) } label: {
+            Button(action: openPlanner) {
                 Label("Lernblöcke planen", systemImage: "wand.and.stars")
             }
-            Button {
-                let s = app.calendarDate.isToday ? Date().at(minutes: (Date().minutesSinceMidnight / 30 + 1) * 30) : app.calendarDate.at(minutes: 10 * 60)
-                app.sheet = .newEvent(start: s, end: s.adding(minutes: 60), moduleID: nil)
-            } label: { Image(systemName: "plus") }
-                .help("Neuer Termin (⌘N)")
-            Picker("Ansicht", selection: Binding(get: { mode }, set: { m in withAnimation(Motion.standard) { modeRaw = m.rawValue } })) {
+            Button(action: newEvent) {
+                Label("Neuer Termin", systemImage: "plus").labelStyle(.iconOnly)
+            }
+            .help("Neuer Termin (⌘N)")
+            Picker("Ansicht", selection: modeBinding.animation(Motion.standard)) {
                 ForEach(CalendarMode.allCases) { Text($0.label).tag($0) }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
             .frame(width: 190)
             HStack(spacing: 2) {
-                Button { step(-1) } label: { Image(systemName: "chevron.left") }
+                Button { step(-1) } label: { Label("Zurück", systemImage: "chevron.left").labelStyle(.iconOnly) }
+                    .help("Zurück (←)")
                 Button("Heute") { direction = app.calendarDate > Date() ? .leading : .trailing; withAnimation(Motion.standard) { app.calendarDate = Date() } }
-                Button { step(1) } label: { Image(systemName: "chevron.right") }
+                Button { step(1) } label: { Label("Weiter", systemImage: "chevron.right").labelStyle(.iconOnly) }
+                    .help("Weiter (→)")
             }
         }
         .padding(.horizontal, 20)
@@ -158,6 +159,15 @@ struct CalendarScreen: View {
         case .week: return "KW \(app.calendarDate.weekNumber) · \(Fmt.weekRange(app.calendarDate.startOfWeek))"
         case .month: return "KW \(app.calendarDate.startOfMonth.weekNumber)–\(app.calendarDate.startOfMonth.adding(months: 1).adding(days: -1).weekNumber)"
         }
+    }
+
+    private func openPlanner() {
+        app.sheet = .planner(max(app.calendarDate.startOfWeek, Date().startOfWeek))
+    }
+
+    private func newEvent() {
+        let s = app.calendarDate.isToday ? Date().at(minutes: (Date().minutesSinceMidnight / 30 + 1) * 30) : app.calendarDate.at(minutes: 10 * 60)
+        app.sheet = .newEvent(start: s, end: s.adding(minutes: 60), moduleID: nil)
     }
 
     private func step(_ dir: Int) {
@@ -193,7 +203,9 @@ struct TimeGridView: View {
     @Environment(\.isCompactLayout) private var compact
     private let hourHeight: CGFloat = 48
     private var gutter: CGFloat { compact ? 44 : 54 }
-    @State private var ghost: (day: Int, start: Int, end: Int)?
+    /// Vorschau beim Aufziehen eines neuen Termins – liegt in einem eigenen Objekt,
+    /// damit nur die Vorschau neu zeichnet und nicht das ganze Raster.
+    @State private var draft = GridDraft()
     @State private var selected: String?
     @State private var scrolled = false
 
@@ -236,15 +248,19 @@ struct TimeGridView: View {
             ForEach(days, id: \.self) { d in
                 HStack(spacing: 6) {
                     Text(Fmt.weekday(d.isoWeekday, short: true)).foregroundStyle(.secondary)
+                        .accessibilityLabel(Fmt.dayLong(d))
                     Text("\(Calendar.kompass.component(.day, from: d))")
                         .foregroundStyle(d.isToday ? Color.white : Color.primary)
                         .frame(minWidth: 24, minHeight: 24)
                         .background(Circle().fill(d.isToday ? Color.red : Color.clear))
                 }
-                .font(.system(size: 13, weight: .semibold))
+                .scaledFont(size: 13, weight: .semibold)
                 .frame(width: colW, height: 34)
                 .contentShape(Rectangle())
                 .onTapGesture(count: 2) { app.calendarDate = d }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { app.calendarDate = d }
                 .contextMenu {
                     if d.startOfDay <= Date() {
                         Button("Alle Termine als wahrgenommen bestätigen") {
@@ -261,25 +277,30 @@ struct TimeGridView: View {
     }
 
     private func allDayRow(_ events: [CalEvent], colW: CGFloat) -> some View {
-        let perDay: [[CalEvent]] = days.map { d in events.filter { $0.start < d.endOfDay && ($0.end > d.startOfDay || $0.start.isSameDay(d)) } }
-        let maxCount = perDay.map(\.count).max() ?? 0
+        let perDay: [(day: Date, events: [CalEvent])] = days.map { d in
+            (d, events.filter { $0.start < d.endOfDay && ($0.end > d.startOfDay || $0.start.isSameDay(d)) })
+        }
+        let maxCount = perDay.map(\.events.count).max() ?? 0
         return Group {
             if maxCount > 0 {
                 HStack(alignment: .top, spacing: 0) {
-                    Text("ganzt.").font(.system(size: 10)).foregroundStyle(.secondary).frame(width: gutter - 6, alignment: .trailing).padding(.trailing, 6)
-                    ForEach(days.indices, id: \.self) { i in
+                    Text("ganzt.").scaledFont(size: 10).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.6)
+                        .frame(width: gutter - 6, alignment: .trailing).padding(.trailing, 6)
+                    ForEach(perDay, id: \.day) { entry in
                         VStack(spacing: 2) {
-                            ForEach(perDay[i].prefix(3)) { e in
+                            ForEach(entry.events.prefix(3)) { e in
                                 let c = e.moduleID.map { store.color(for: $0) } ?? e.calendarColor
                                 Text(e.title)
-                                    .font(.system(size: 11, weight: .medium))
+                                    .scaledFont(size: 11, weight: .medium)
                                     .lineLimit(1)
                                     .padding(.horizontal, 6).padding(.vertical, 2)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .background(RoundedRectangle(cornerRadius: 4).fill(c.opacity(0.22)))
                                     .onTapGesture(count: 2) { app.sheet = .editEvent(e.id) }
+                                    .accessibilityAddTraits(.isButton)
+                                    .accessibilityAction(named: "Bearbeiten") { app.sheet = .editEvent(e.id) }
                             }
-                            if perDay[i].count > 3 { Text("+\(perDay[i].count - 3)").font(.caption2).foregroundStyle(.secondary) }
+                            if entry.events.count > 3 { Text("+\(entry.events.count - 3)").font(.caption2).foregroundStyle(.secondary) }
                         }
                         .padding(.horizontal, 2)
                         .frame(width: colW, alignment: .top)
@@ -300,8 +321,10 @@ struct TimeGridView: View {
                 ForEach(0..<24, id: \.self) { h in
                     HStack(alignment: .top, spacing: 0) {
                         Text(h == 0 ? "" : String(format: "%02d:00", h))
-                            .font(.system(size: 10, weight: .medium).monospacedDigit())
+                            .scaledFont(size: 10, weight: .medium).monospacedDigit()
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
                             .frame(width: gutter - 8, alignment: .trailing)
                             .padding(.trailing, 8)
                             .offset(y: -6)
@@ -313,8 +336,8 @@ struct TimeGridView: View {
             }
 
             // Tages-Hintergründe: Wochenende, Lernfenster, feste Arbeitszeiten
-            ForEach(days.indices, id: \.self) { i in
-                dayBackground(day: days[i], height: totalH)
+            ForEach(Array(days.enumerated()), id: \.element) { i, day in
+                dayBackground(day: day, height: totalH)
                     .frame(width: colW, height: totalH)
                     .offset(x: gutter + colW * CGFloat(i))
             }
@@ -330,9 +353,9 @@ struct TimeGridView: View {
             #endif
 
             // Feste Arbeitszeiten (anklickbar → „wahrgenommen“)
-            ForEach(days.indices, id: \.self) { i in
-                ForEach(store.workBlocks.filter { $0.weekday == days[i].isoWeekday }) { w in
-                    WorkBlockCell(item: app.trackItem(for: w, on: days[i]),
+            ForEach(Array(days.enumerated()), id: \.element) { i, day in
+                ForEach(store.workBlocks.filter { $0.weekday == day.isoWeekday }) { w in
+                    WorkBlockCell(item: app.trackItem(for: w, on: day),
                                   width: colW - 4, height: CGFloat(w.endMinutes - w.startMinutes) / 60 * hourHeight)
                         .offset(x: gutter + colW * CGFloat(i) + 2, y: CGFloat(w.startMinutes) / 60 * hourHeight)
                 }
@@ -344,17 +367,7 @@ struct TimeGridView: View {
             }
 
             // Neuer-Termin-Vorschau
-            if let g = ghost {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(Color.accentColor.opacity(0.25))
-                    .overlay(alignment: .topLeading) {
-                        Text("\(Fmt.hm(g.start))–\(Fmt.hm(g.end))").font(.system(size: 11, weight: .semibold)).padding(5)
-                    }
-                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.accentColor, lineWidth: 1))
-                    .frame(width: colW - 4, height: max(12, CGFloat(g.end - g.start) / 60 * hourHeight))
-                    .offset(x: gutter + colW * CGFloat(g.day) + 2, y: CGFloat(g.start) / 60 * hourHeight)
-                    .allowsHitTesting(false)
-            }
+            GhostPreview(draft: draft, colW: colW, gutter: gutter, hourHeight: hourHeight)
 
             // Termine
             ForEach(segments) { seg in
@@ -379,7 +392,7 @@ struct TimeGridView: View {
             }
         }
         .frame(height: totalH, alignment: .topLeading)
-        .coordinateSpace(name: "grid")
+        .coordinateSpace(.named("grid"))
         .padding(.top, 8)
         .padding(.bottom, 8)
     }
@@ -405,11 +418,11 @@ struct TimeGridView: View {
                 let day = min(days.count - 1, max(0, Int((v.startLocation.x - gutter) / colW)))
                 let a = snap(v.startLocation.y), b = snap(v.location.y)
                 let s = min(a, b), e = max(a, b)
-                ghost = (day, s, max(e, s + 15))
+                draft.ghost = GridDraft.Ghost(day: day, start: s, end: max(e, s + 15))
             }
             .onEnded { _ in
-                guard let g = ghost else { return }
-                ghost = nil
+                guard let g = draft.ghost else { return }
+                draft.ghost = nil
                 let d = days[g.day]
                 app.sheet = .newEvent(start: d.at(minutes: g.start), end: d.at(minutes: g.end), moduleID: nil)
             }
@@ -464,6 +477,33 @@ struct TimeGridView: View {
     }
 }
 
+@Observable
+final class GridDraft {
+    struct Ghost: Equatable { var day: Int; var start: Int; var end: Int }
+    var ghost: Ghost?
+}
+
+private struct GhostPreview: View {
+    let draft: GridDraft
+    let colW: CGFloat
+    let gutter: CGFloat
+    let hourHeight: CGFloat
+
+    var body: some View {
+        if let g = draft.ghost {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Color.accentColor.opacity(0.25))
+                .overlay(alignment: .topLeading) {
+                    Text("\(Fmt.hm(g.start))–\(Fmt.hm(g.end))").scaledFont(size: 11, weight: .semibold).padding(5)
+                }
+                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.accentColor, lineWidth: 1))
+                .frame(width: colW - 4, height: max(12, CGFloat(g.end - g.start) / 60 * hourHeight))
+                .offset(x: gutter + colW * CGFloat(g.day) + 2, y: CGFloat(g.start) / 60 * hourHeight)
+                .allowsHitTesting(false)
+        }
+    }
+}
+
 // MARK: - Termin-Block mit direkter Manipulation
 
 struct EventBlockView: View {
@@ -490,14 +530,14 @@ struct EventBlockView: View {
         let confirmed = event.start < Date() && app.isConfirmed(app.trackItem(for: event))
         VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 4) {
-                if confirmed { Image(systemName: "checkmark.circle.fill").font(.system(size: 9)).foregroundStyle(.green) }
-                if event.link?.kind == .deadline { Image(systemName: "flag.fill").font(.system(size: 8)) }
-                if isBlock { Image(systemName: "brain.head.profile").font(.system(size: 8)) }
-                Text(event.title).font(.system(size: 11, weight: .semibold)).lineLimit(compact ? 1 : 2)
+                if confirmed { Image(systemName: "checkmark.circle.fill").scaledFont(size: 9).foregroundStyle(.green) }
+                if event.link?.kind == .deadline { Image(systemName: "flag.fill").scaledFont(size: 8) }
+                if isBlock { Image(systemName: "brain.head.profile").scaledFont(size: 8) }
+                Text(event.title).scaledFont(size: 11, weight: .semibold).lineLimit(compact ? 1 : 2)
             }
             if !compact {
-                Text(timeLabel).font(.system(size: 10).monospacedDigit()).opacity(0.75)
-                if !event.location.isEmpty, height > 56 { Text(event.location).font(.system(size: 10)).lineLimit(1).opacity(0.7) }
+                Text(timeLabel).scaledFont(size: 10).monospacedDigit().opacity(0.75)
+                if !event.location.isEmpty, height > 56 { Text(event.location).scaledFont(size: 10).lineLimit(1).opacity(0.7) }
             }
         }
         .foregroundStyle(.primary)
@@ -531,9 +571,16 @@ struct EventBlockView: View {
         .zIndex(active ? 100 : (selected == event.id ? 50 : 0))
         .opacity(event.end < Date() && !active ? 0.6 : 1)
         .contentShape(Rectangle())
+        // Gesten statt Button: Einfach- und Doppelklick sowie Ziehen auf demselben Block.
         .onTapGesture(count: 2) { app.sheet = .editEvent(event.id) }
         .onTapGesture { selected = (selected == event.id ? nil : event.id) }
         .gesture(moveGesture, including: event.editable ? .all : .subviews)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(event.title), \(Fmt.time(event.start)) bis \(Fmt.time(event.end))")
+        .accessibilityValue(confirmed ? "wahrgenommen" : "")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { selected = (selected == event.id ? nil : event.id) }
+        .accessibilityAction(named: "Bearbeiten") { app.sheet = .editEvent(event.id) }
         .sensoryFeedback(.impact(weight: .medium), trigger: active) { _, new in new }
         .sensoryFeedback(.selection, trigger: drag) { old, new in active && snapKey(old) != snapKey(new) }
         .popover(isPresented: Binding(get: { selected == event.id && !active }, set: { if !$0 && selected == event.id { selected = nil } }), arrowEdge: .trailing) {
@@ -729,7 +776,7 @@ struct MonthGridView: View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
                 ForEach(1...7, id: \.self) { wd in
-                    Text(Fmt.weekday(wd, short: true)).font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
+                    Text(Fmt.weekday(wd, short: true)).scaledFont(size: 12, weight: .semibold).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity).padding(.vertical, 6)
                 }
             }
@@ -741,6 +788,8 @@ struct MonthGridView: View {
                         let evs = events.filter { $0.start < d.endOfDay && $0.end > d.startOfDay || ($0.isAllDay && $0.start.isSameDay(d)) }
                         MonthCell(day: d, inMonth: Calendar.kompass.isDate(d, equalTo: month, toGranularity: .month), events: evs, height: h)
                             .onTapGesture(count: 2) { openDay(d) }
+                            .accessibilityAddTraits(.isButton)
+                            .accessibilityAction { openDay(d) }
                     }
                 }
             }
@@ -761,7 +810,7 @@ struct MonthCell: View {
             HStack {
                 Spacer()
                 Text("\(Calendar.kompass.component(.day, from: day))")
-                    .font(.system(size: 12, weight: day.isToday ? .bold : .medium))
+                    .scaledFont(size: 12, weight: day.isToday ? .bold : .medium)
                     .foregroundStyle(day.isToday ? Color.white : (inMonth ? Color.primary : Color.secondary))
                     .frame(minWidth: 22, minHeight: 22)
                     .background(Circle().fill(day.isToday ? Color.red : .clear))
@@ -770,19 +819,19 @@ struct MonthCell: View {
                 let c = e.moduleID.map { store.color(for: $0) } ?? e.calendarColor
                 HStack(spacing: 4) {
                     if e.isAllDay {
-                        Text(e.title).font(.system(size: 10.5, weight: .medium)).lineLimit(1)
+                        Text(e.title).scaledFont(size: 10.5, weight: .medium).lineLimit(1)
                             .padding(.horizontal, 4).frame(maxWidth: .infinity, alignment: .leading)
                             .background(RoundedRectangle(cornerRadius: 3).fill(c.opacity(0.25)))
                     } else {
                         Circle().fill(c).frame(width: 6, height: 6)
-                        Text(e.title).font(.system(size: 10.5)).lineLimit(1)
+                        Text(e.title).scaledFont(size: 10.5).lineLimit(1)
                         Spacer(minLength: 0)
-                        Text(Fmt.time(e.start)).font(.system(size: 9.5).monospacedDigit()).foregroundStyle(.secondary)
+                        Text(Fmt.time(e.start)).scaledFont(size: 9.5).monospacedDigit().foregroundStyle(.secondary)
                     }
                 }
             }
             if events.count > maxRows {
-                Text("+\(events.count - maxRows) weitere").font(.system(size: 10)).foregroundStyle(.secondary)
+                Text("+\(events.count - maxRows) weitere").scaledFont(size: 10).foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
         }
@@ -806,23 +855,27 @@ struct WorkBlockCell: View {
     var body: some View {
         let confirmed = app.isConfirmed(item)
         let skipped = !confirmed && app.isSkipped(item)
-        RoundedRectangle(cornerRadius: 4, style: .continuous)
-            .fill(Color.gray.opacity(confirmed ? 0.22 : 0.12))
-            .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).strokeBorder(Color.gray.opacity(show ? 0.6 : 0), lineWidth: 1))
-            .overlay(alignment: .topLeading) {
-                HStack(spacing: 4) {
-                    Image(systemName: confirmed ? "checkmark.circle.fill" : (skipped ? "xmark.circle" : "briefcase"))
-                        .foregroundStyle(confirmed ? Color.green : Color.secondary)
-                    Text(item.title).strikethrough(skipped)
+        Button { show.toggle() } label: {
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(Color.gray.opacity(confirmed ? 0.22 : 0.12))
+                .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).strokeBorder(Color.gray.opacity(show ? 0.6 : 0), lineWidth: 1))
+                .overlay(alignment: .topLeading) {
+                    HStack(spacing: 4) {
+                        Image(systemName: confirmed ? "checkmark.circle.fill" : (skipped ? "xmark.circle" : "briefcase"))
+                            .foregroundStyle(confirmed ? Color.green : Color.secondary)
+                        Text(item.title).strikethrough(skipped)
+                    }
+                    .scaledFont(size: 10, weight: .medium)
+                    .foregroundStyle(.secondary)
+                    .padding(4)
                 }
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(.secondary)
-                .padding(4)
-            }
-            .frame(width: width, height: max(14, height))
-            .contentShape(Rectangle())
-            .onTapGesture { show.toggle() }
-            .popover(isPresented: $show, arrowEdge: .trailing) { WorkBlockPopover(item: item).compactPopover() }
-            .help("Feste Arbeitszeit – klicken zum Bestätigen")
+                .frame(width: width, height: max(14, height))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Arbeitszeit: \(item.title)")
+        .accessibilityValue(confirmed ? "wahrgenommen" : (skipped ? "nicht wahrgenommen" : "offen"))
+        .popover(isPresented: $show, arrowEdge: .trailing) { WorkBlockPopover(item: item).compactPopover() }
+        .help("Feste Arbeitszeit – klicken zum Bestätigen")
     }
 }

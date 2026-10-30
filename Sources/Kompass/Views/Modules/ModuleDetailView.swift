@@ -19,7 +19,7 @@ struct ModuleDetailView: View {
                     .padding(.bottom, 12)
                 if compact {
                     // iPhone: Reiter als wischbare Chips
-                    ScrollView(.horizontal, showsIndicators: false) {
+                    ScrollView(.horizontal) {
                         HStack(spacing: 6) {
                             ForEach(ModuleTab.allCases) { t in
                                 FilterChip(label: t.label, selected: app.moduleTab == t) {
@@ -29,9 +29,10 @@ struct ModuleDetailView: View {
                         }
                         .padding(.horizontal, 16)
                     }
+                    .scrollIndicators(.hidden)
                     .padding(.bottom, 10)
                 } else {
-                    Picker("", selection: $app.moduleTab) {
+                    Picker("Bereich", selection: $app.moduleTab) {
                         ForEach(ModuleTab.allCases) { t in Text(t.label).tag(t) }
                     }
                     .pickerStyle(.segmented)
@@ -70,11 +71,11 @@ struct ModuleHeader: View {
         HStack(alignment: .center, spacing: 16) {
             ZStack {
                 ProgressRing(value: p.overall, color: module.color.color, lineWidth: compact ? 5 : 6, size: compact ? 46 : 56)
-                Text("\(Int(p.overall * 100))").font(.system(size: 17, weight: .bold, design: .rounded)).monospacedDigit()
+                Text("\(Int(p.overall * 100))").scaledFont(size: 17, weight: .bold, design: .rounded).monospacedDigit()
             }
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 8) {
-                    Text(module.name).font(.system(size: compact ? 21 : 26, weight: .bold)).tracking(-0.5).lineLimit(compact ? 2 : 1)
+                    Text(module.name).scaledFont(size: compact ? 21 : 26, weight: .bold).tracking(-0.5).lineLimit(compact ? 2 : 1)
                     if !module.code.isEmpty { Pill(text: module.code, color: module.color.color) }
                 }
                 FlowLayout(spacing: 10) {
@@ -83,7 +84,7 @@ struct ModuleHeader: View {
                     if !module.lecturer.isEmpty { Text(module.lecturer) }
                     if let e = p.examDate { Label("Klausur \(Fmt.relative(e)) · \(Fmt.dayShort(e))", systemImage: "graduationcap") }
                 }
-                .font(.system(size: 12, weight: .medium))
+                .scaledFont(size: 12, weight: .medium)
                 .foregroundStyle(.secondary)
             }
             Spacer()
@@ -91,9 +92,10 @@ struct ModuleHeader: View {
                 app.assistant.scopeModuleID = module.id
                 withAnimation(Motion.standard) { app.showAssistant = true }
             } label: {
-                if compact { Image(systemName: "sparkles") } else { Label("Fragen", systemImage: "sparkles") }
+                Label("Fragen", systemImage: "sparkles")
+                    .labelStyle(AdaptiveIconLabelStyle(iconOnly: compact))
             }
-                .help("Assistent zu diesem Modul")
+            .help("Assistent zu diesem Modul")
             Menu {
                 Button("Frist hinzufügen …") { app.sheet = .deadline(nil, moduleID: module.id, kind: nil) }
                 Button("Klausurtermin eintragen …") { app.sheet = .deadline(nil, moduleID: module.id, kind: .klausur) }
@@ -101,7 +103,7 @@ struct ModuleHeader: View {
                 Divider()
                 Button("Modul bearbeiten …") { app.sheet = .editModule(module.id) }
                 Button(module.archived ? "Wiederherstellen" : "Archivieren") { store.updateModule(module.id) { $0.archived.toggle() } }
-            } label: { Image(systemName: "ellipsis.circle") }
+            } label: { Label("Weitere Aktionen", systemImage: "ellipsis.circle").labelStyle(.iconOnly) }
                 .plainMenu()
         }
     }
@@ -110,21 +112,23 @@ struct ModuleHeader: View {
 // MARK: - Übersicht
 
 struct ModuleOverviewTab: View {
-    @Environment(AppModel.self) private var app
     @Environment(DataStore.self) private var store
-    @Environment(FocusTimer.self) private var timer
     var module: Module
 
     var body: some View {
         let p = ProgressEngine.progress(for: module, store: store)
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                // Karten als eigene Views: ViewThatFits baut beide Varianten, gerechnet wird nur in der sichtbaren.
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .top, spacing: 20) {
-                        VStack(spacing: 20) { progressCard(p); studyChart }.frame(minWidth: 380)
-                        VStack(spacing: 20) { nextCard; sessionsCard }.frame(width: 330)
+                        VStack(spacing: 20) { ModuleProgressCard(module: module, progress: p); ModuleStudyChart(module: module) }.frame(minWidth: 380)
+                        VStack(spacing: 20) { ModuleNextCard(module: module); ModuleSessionsCard(module: module) }.frame(width: 330)
                     }
-                    VStack(spacing: 20) { progressCard(p); nextCard; studyChart; sessionsCard }
+                    VStack(spacing: 20) {
+                        ModuleProgressCard(module: module, progress: p); ModuleNextCard(module: module)
+                        ModuleStudyChart(module: module); ModuleSessionsCard(module: module)
+                    }
                 }
                 if !module.notes.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
@@ -139,8 +143,16 @@ struct ModuleOverviewTab: View {
             .frame(maxWidth: .infinity)
         }
     }
+}
 
-    private func progressCard(_ p: ModuleProgress) -> some View {
+private struct ModuleProgressCard: View {
+    @Environment(DataStore.self) private var store
+    @Environment(FocusTimer.self) private var timer
+    let module: Module
+    let progress: ModuleProgress
+
+    var body: some View {
+        let p = progress
         VStack(alignment: .leading, spacing: 14) {
             SectionLabel("Fortschritt", symbol: "chart.line.uptrend.xyaxis") {
                 if p.examDate != nil {
@@ -168,69 +180,96 @@ struct ModuleOverviewTab: View {
         }
         .card()
     }
+}
 
-    private var studyChart: some View {
+private struct ModuleStudyChart: View {
+    @Environment(DataStore.self) private var store
+    let module: Module
+
+    var body: some View {
         let weeks = (0..<8).reversed().map { Date().startOfWeek.adding(weeks: -$0) }
         let data = weeks.map { w in (w, store.minutes(moduleID: module.id, from: w, to: w.adding(days: 7))) }
-        return VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 10) {
             SectionLabel("Lernzeit der letzten Wochen", symbol: "chart.bar")
             Chart {
                 ForEach(data, id: \.0) { w, m in
                     BarMark(x: .value("KW", "KW\(w.weekNumber)"), y: .value("Stunden", Double(m) / 60))
                         .foregroundStyle(module.color.color.gradient)
                         .cornerRadius(4)
+                        .accessibilityLabel("KW \(w.weekNumber)")
+                        .accessibilityValue(Fmt.hours(m))
                 }
                 RuleMark(y: .value("Ziel", module.weeklyGoalHours))
                     .foregroundStyle(.secondary)
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
                     .annotation(position: .top, alignment: .leading) { Text("Ziel").font(.caption2).foregroundStyle(.secondary) }
+                    .accessibilityLabel("Wochenziel")
+                    .accessibilityValue("\(module.weeklyGoalHours.formatted()) Stunden")
             }
             .frame(height: 160)
         }
         .card()
     }
+}
 
-    private var nextCard: some View {
+private struct ModuleNextCard: View {
+    @Environment(AppModel.self) private var app
+    @Environment(DataStore.self) private var store
+    let module: Module
+
+    var body: some View {
         let dls = store.deadlines.filter { $0.moduleID == module.id && !$0.done }.sorted { $0.date < $1.date }
         let blocks = store.blocks.filter { $0.moduleID == module.id && $0.status == .planned && $0.end > Date() }.sorted { $0.start < $1.start }.prefix(3)
-        return VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 10) {
             SectionLabel("Als Nächstes", symbol: "flag") {
-                Button { app.sheet = .deadline(nil, moduleID: module.id, kind: nil) } label: { Image(systemName: "plus") }.buttonStyle(.borderless)
+                Button { app.sheet = .deadline(nil, moduleID: module.id, kind: nil) } label: { Label("Neue Frist", systemImage: "plus").labelStyle(.iconOnly) }
+                    .buttonStyle(.borderless)
+                    .help("Neue Frist")
             }
             if dls.isEmpty && blocks.isEmpty {
                 Text("Keine Fristen. Trag den Klausurtermin ein, damit Kompass rückwärts planen kann.").font(.callout).foregroundStyle(.secondary)
                 Button("Klausurtermin eintragen") { app.sheet = .deadline(nil, moduleID: module.id, kind: .klausur) }
             }
             ForEach(dls.prefix(4)) { d in
-                HStack {
-                    Image(systemName: d.kind.symbol).foregroundStyle(d.kind.tint).frame(width: 18)
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(d.title).font(.callout.weight(.medium))
-                        Text(Fmt.dateTime(d.date, allDay: d.allDay)).font(.caption).foregroundStyle(.secondary)
+                Button { app.sheet = .deadline(d.id, moduleID: nil, kind: nil) } label: {
+                    HStack {
+                        Image(systemName: d.kind.symbol).foregroundStyle(d.kind.tint).frame(width: 18).accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(d.title).font(.callout.weight(.medium))
+                            Text(Fmt.dateTime(d.date, allDay: d.allDay)).font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Text(Fmt.relative(d.date)).font(.caption.weight(.semibold)).foregroundStyle(Date().daysUntil(d.date) <= 3 ? .orange : .secondary)
                     }
-                    Spacer()
-                    Text(Fmt.relative(d.date)).font(.caption.weight(.semibold)).foregroundStyle(Date().daysUntil(d.date) <= 3 ? .orange : .secondary)
+                    .contentShape(Rectangle())
                 }
-                .contentShape(Rectangle())
-                .onTapGesture { app.sheet = .deadline(d.id, moduleID: nil, kind: nil) }
+                .buttonStyle(.plain)
             }
             ForEach(Array(blocks)) { b in
                 HStack {
-                    Image(systemName: "brain.head.profile").foregroundStyle(module.color.color).frame(width: 18)
+                    Image(systemName: "brain.head.profile").foregroundStyle(module.color.color).frame(width: 18).accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 0) {
                         Text("Lernblock\(b.focus.isEmpty ? "" : ": \(b.focus)")").font(.callout)
                         Text("\(Fmt.dayShort(b.start)), \(Fmt.time(b.start))–\(Fmt.time(b.end))").font(.caption).foregroundStyle(.secondary)
                     }
                 }
+                .accessibilityElement(children: .combine)
             }
         }
         .card()
     }
+}
 
-    private var sessionsCard: some View {
+private struct ModuleSessionsCard: View {
+    @Environment(AppModel.self) private var app
+    let module: Module
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             SectionLabel("Veranstaltungen", symbol: "building.columns") {
-                Button { app.sheet = .editModule(module.id) } label: { Image(systemName: "pencil") }.buttonStyle(.borderless)
+                Button { app.sheet = .editModule(module.id) } label: { Label("Veranstaltungen bearbeiten", systemImage: "pencil").labelStyle(.iconOnly) }
+                    .buttonStyle(.borderless)
+                    .help("Veranstaltungen bearbeiten")
             }
             if module.sessions.isEmpty {
                 Text("Noch keine Vorlesungs- oder Übungszeiten. Sie werden als wiederkehrende Termine in Apple Kalender eingetragen.")
@@ -243,8 +282,11 @@ struct ModuleOverviewTab: View {
                     if s.biweekly { Pill(text: "14-tägl.") }
                     Spacer()
                     Text(s.room).font(.caption).foregroundStyle(.secondary)
-                    if s.eventIdentifier != nil { Image(systemName: "calendar").font(.caption2).foregroundStyle(.tertiary) }
+                    if s.eventIdentifier != nil {
+                        Image(systemName: "calendar").font(.caption2).foregroundStyle(.tertiary).accessibilityLabel("Im Kalender")
+                    }
                 }
+                .accessibilityElement(children: .combine)
             }
         }
         .card()
@@ -260,7 +302,7 @@ struct ProgressLine: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(label).font(.system(size: 12, weight: .medium))
+                Text(label).scaledFont(size: 12, weight: .medium)
                 Spacer()
                 Text(detail).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
             }
@@ -340,20 +382,31 @@ struct TopicRow: View {
             } else {
                 Text(topic.title).font(.callout).foregroundStyle(topic.covered ? .primary : .secondary)
                     .onTapGesture(count: 2) { title = topic.title; editing = true }
+                    .accessibilityAction(named: "Umbenennen") { title = topic.title; editing = true }
             }
             Spacer()
             HStack(spacing: 3) {
                 ForEach(0..<5, id: \.self) { i in
-                    Button {
-                        withAnimation(Motion.snappy) { update { $0.confidence = Topic.levels[i].value; $0.lastReviewed = Date() } }
-                    } label: {
+                    Button { setLevel(i) } label: {
                         Capsule()
                             .fill(i <= topic.levelIndex && topic.confidence > 0 ? levelColor(topic.levelIndex) : Color.primary.opacity(0.1))
                             .frame(width: compact ? 16 : 22, height: 8)
-                        .padding(.vertical, compact ? 8 : 0)
+                            .padding(.vertical, compact ? 8 : 0)
                     }
                     .buttonStyle(.pressable)
                     .help(Topic.levels[i].label)
+                }
+            }
+            // VoiceOver: ein einstellbarer Wert statt fünf unbeschrifteter Knöpfe
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Sicherheit")
+            .accessibilityValue(topic.confidence > 0 ? topic.levelLabel : "nicht bewertet")
+            .accessibilityAdjustableAction { direction in
+                let current = topic.confidence > 0 ? topic.levelIndex : -1
+                switch direction {
+                case .increment: setLevel(min(4, current + 1))
+                case .decrement: setLevel(max(0, current - 1))
+                @unknown default: break
                 }
             }
             if !compact { Text(topic.levelLabel).font(.caption).foregroundStyle(.secondary).frame(width: 70, alignment: .leading) }
@@ -362,10 +415,14 @@ struct TopicRow: View {
                 Button("Abfragen lassen") { app.assistant.ask("Frag mich zum Thema „\(topic.title)“ ab – eine Frage nach der anderen.", scope: moduleID) }
                 Divider()
                 Button("Löschen", role: .destructive) { store.updateModule(moduleID) { $0.topics.removeAll { $0.id == topic.id } } }
-            } label: { Image(systemName: "ellipsis") }
+            } label: { Label("Weitere Aktionen", systemImage: "ellipsis").labelStyle(.iconOnly) }
                 .plainMenu()
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
+    }
+
+    private func setLevel(_ i: Int) {
+        withAnimation(Motion.snappy) { update { $0.confidence = Topic.levels[i].value; $0.lastReviewed = Date() } }
     }
 
     private func levelColor(_ i: Int) -> Color { [.red, .red, .orange, .yellow, .green][i] }
@@ -398,13 +455,14 @@ struct MaterialsTab: View {
         }
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                WueModuleBanner(module: module)
                 dropZone
                 if !module.materials.isEmpty {
                     TextField("Materialien durchsuchen", text: $search).textFieldStyle(.roundedBorder).frame(maxWidth: 320)
                 }
                 ForEach(groups, id: \.0) { kind, items in
                     VStack(alignment: .leading, spacing: 8) {
-                        Label("\(kind.plural) (\(items.count))", systemImage: kind.symbol).font(.system(size: 14, weight: .semibold))
+                        Label("\(kind.plural) (\(items.count))", systemImage: kind.symbol).scaledFont(size: 14, weight: .semibold)
                         VStack(spacing: 0) {
                             ForEach(items) { mat in
                                 MaterialRow(module: module, material: mat) { preview = Paths.materialFile(module.id, mat) }
@@ -431,8 +489,9 @@ struct MaterialsTab: View {
 
     private var dropZone: some View {
         VStack(spacing: 10) {
-            Image(systemName: "square.and.arrow.down.on.square").font(.system(size: 28)).foregroundStyle(dropTargeted ? Color.accentColor : .secondary)
-            Text(Platform.isMac ? "Dateien oder Ordner hierher ziehen" : "Materialien hinzufügen").font(.system(size: 14, weight: .semibold))
+            Image(systemName: "square.and.arrow.down.on.square").scaledFont(size: 28).foregroundStyle(dropTargeted ? Color.accentColor : .secondary)
+                .accessibilityHidden(true)
+            Text(Platform.isMac ? "Dateien oder Ordner hierher ziehen" : "Materialien hinzufügen").scaledFont(size: 14, weight: .semibold)
             Text("PDF (auch Scans), PowerPoint, Word, Bilder, Notebooks, Text – Vorlesungen, Übungen, Altklausuren, Probeklausuren …")
                 .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
             HStack {
@@ -474,7 +533,7 @@ struct MaterialRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: material.kind.symbol).foregroundStyle(module.color.color).frame(width: 22)
+            Image(systemName: material.kind.symbol).foregroundStyle(module.color.color).frame(width: 22).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 if renaming {
                     TextField("Titel", text: $title).onSubmit { store.updateMaterial(material.id) { $0.title = title.trimmed.isEmpty ? $0.title : title.trimmed }; renaming = false }
@@ -492,6 +551,7 @@ struct MaterialRow: View {
                         if material.usedOCR == true { Text("· Texterkennung") }
                     }
                     Text("· \(material.fileExtension.uppercased())")
+                    if material.sourceKey != nil { Label("WueCampus", systemImage: "graduationcap").labelStyle(.titleAndIcon) }
                 }
                 .font(.caption).foregroundStyle(.secondary)
             }
@@ -506,6 +566,12 @@ struct MaterialRow: View {
                 Divider()
                 Button("Zusammenfassen") { app.sheet = .generator(.summary, module.id, [material.id]) }
                 Button("Karteikarten erstellen") { app.sheet = .generator(.flashcards, module.id, [material.id]) }
+                Button("Mehr Karteikarten mit Claude") {
+                    var options = GeneratorOptions()
+                    options.count = 10
+                    app.claude.enqueue(.flashcards, module: module, materialIDs: [material.id], options: options)
+                    app.showToast("10 weitere Karten kommen mit dem nächsten Claude-Durchlauf", symbol: "sparkles")
+                }
                 Button("Quiz erstellen") { app.sheet = .generator(.quiz, module.id, [material.id]) }
                 if material.kind == .altklausur || material.kind == .probeklausur {
                     Button("Probeklausur in diesem Stil") { app.sheet = .generator(.mockExam, module.id, [material.id]) }
@@ -519,12 +585,13 @@ struct MaterialRow: View {
                 Button("Text neu einlesen") { MaterialImporter.extract(materialID: material.id, moduleID: module.id, file: Paths.materialFile(module.id, material), store: store) }
                 Divider()
                 Button("Löschen …", role: .destructive) { confirmDelete = true }
-            } label: { Image(systemName: "ellipsis.circle") }
+            } label: { Label("Weitere Aktionen", systemImage: "ellipsis.circle").labelStyle(.iconOnly) }
                 .plainMenu()
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { onOpen() }
+        .accessibilityAction(named: "Öffnen") { onOpen() }
         .confirmationDialog("„\(material.title)“ löschen?", isPresented: $confirmDelete) {
             Button("Löschen", role: .destructive) { store.deleteMaterial(material.id) }
         } message: { Text("Die Kopie in Kompass wird gelöscht. Deine Originaldatei bleibt erhalten.") }
@@ -544,7 +611,7 @@ struct PasteMaterialSheet: View {
             SheetHeader(title: "Text als Material") { EmptyView() }
             HStack {
                 TextField("Titel", text: $title)
-                Picker("", selection: $kind) { ForEach(MaterialKind.allCases) { Text($0.label).tag($0) } }.labelsHidden().frame(width: 160)
+                Picker("Art", selection: $kind) { ForEach(MaterialKind.allCases) { Text($0.label).tag($0) } }.labelsHidden().frame(width: 160)
             }
             TextEditor(text: $text).font(.body).frame(minHeight: 260)
                 .scrollContentBackground(.hidden).padding(6)

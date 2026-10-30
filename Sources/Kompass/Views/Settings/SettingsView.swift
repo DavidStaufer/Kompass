@@ -14,9 +14,10 @@ struct SettingsView: View {
             CalendarSettings().tabItem { Label("Kalender", systemImage: "calendar") }
             ReminderSettings().tabItem { Label("Erinnerungen", systemImage: "bell") }
             AISettings().tabItem { Label("KI", systemImage: "sparkles") }
+            WueCampusSettings().tabItem { Label("WueCampus", systemImage: "graduationcap") }
             DataSettings().tabItem { Label("Daten & Sync", systemImage: "icloud") }
         }
-        .frame(width: 640, height: 540)
+        .frame(width: 700, height: 560)
         #else
         NavigationStack {
             List {
@@ -33,6 +34,7 @@ struct SettingsView: View {
                     link("Kalender", "calendar", .red) { CalendarSettings() }
                     link("Erinnerungen", "bell", .orange) { ReminderSettings() }
                     link("KI-Assistent", "sparkles", .indigo) { AISettings() }
+                    link("WueCampus", "graduationcap", .blue) { WueCampusSettings() }
                 }
             }
             .navigationTitle("Einstellungen")
@@ -52,8 +54,9 @@ struct SettingsView: View {
             Label {
                 Text(title)
             } icon: {
-                Image(systemName: symbol).font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
+                Image(systemName: symbol).scaledFont(size: 13, weight: .semibold).foregroundStyle(.white)
                     .frame(width: 28, height: 28)
+                    .accessibilityHidden(true)
                     .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(color.gradient))
             }
         }
@@ -186,7 +189,9 @@ struct TimeSettings: View {
                             .plainMenu()
                         TextField("", text: $c.name)
                         Toggle("Archiviert", isOn: $c.archived).checkboxStyle()
-                        Button { store.timeCategories.removeAll { $0.id == c.id } } label: { Image(systemName: "minus.circle.fill").foregroundStyle(.secondary) }
+                        Button { store.timeCategories.removeAll { $0.id == c.id } } label: {
+                            Label("Kategorie entfernen", systemImage: "minus.circle.fill").labelStyle(.iconOnly).foregroundStyle(.secondary)
+                        }
                             .buttonStyle(.borderless)
                             .disabled(store.worklogs.contains { $0.categoryID == c.id })
                             .help(store.worklogs.contains { $0.categoryID == c.id } ? "Hat Buchungen – stattdessen archivieren" : "Löschen")
@@ -204,11 +209,13 @@ struct TimeSettings: View {
                 ForEach(store.categoryRules) { r in
                     HStack {
                         Text("„\(r.title)“")
-                        Image(systemName: "arrow.right").foregroundStyle(.secondary)
+                        Image(systemName: "arrow.right").foregroundStyle(.secondary).accessibilityLabel("wird gebucht auf")
                         Text(store.label(for: TrackTarget(kind: r.kind, moduleID: r.moduleID, categoryID: r.categoryID)).name)
                         Text(r.activity.label).font(.caption).foregroundStyle(.secondary)
                         Spacer()
-                        Button { store.categoryRules.removeAll { $0.key == r.key } } label: { Image(systemName: "minus.circle.fill").foregroundStyle(.secondary) }
+                        Button { store.categoryRules.removeAll { $0.key == r.key } } label: {
+                            Label("Regel entfernen", systemImage: "minus.circle.fill").labelStyle(.iconOnly).foregroundStyle(.secondary)
+                        }
                             .buttonStyle(.borderless)
                     }
                 }
@@ -245,6 +252,7 @@ struct CalendarSettings: View {
     @Environment(CalendarService.self) private var calendar
 
     var body: some View {
+        @Bindable var store = store
         Form {
             Section("Zugriff") {
                 LabeledContent("Kalender") { status(calendar.eventsAuthorized) }
@@ -262,7 +270,7 @@ struct CalendarSettings: View {
                 ForEach(groupedSources, id: \.0) { source, cals in
                     Text(source).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                     ForEach(cals, id: \.calendarIdentifier) { c in
-                        Toggle(isOn: visibility(c.calendarIdentifier)) {
+                        Toggle(isOn: $store.prefs[calendarVisible: c.calendarIdentifier]) {
                             HStack {
                                 Circle().fill(Color(cgColor: c.cgColor)).frame(width: 9, height: 9)
                                 Text(c.title)
@@ -280,15 +288,6 @@ struct CalendarSettings: View {
 
     private var groupedSources: [(String, [EKCalendar])] {
         Dictionary(grouping: calendar.calendars, by: { $0.source.title }).sorted { $0.key < $1.key }.map { ($0.key, $0.value) }
-    }
-
-    private func visibility(_ id: String) -> Binding<Bool> {
-        Binding(
-            get: { !store.prefs.hiddenCalendarIDs.contains(id) },
-            set: { on in
-                if on { store.prefs.hiddenCalendarIDs.removeAll { $0 == id } } else if !store.prefs.hiddenCalendarIDs.contains(id) { store.prefs.hiddenCalendarIDs.append(id) }
-            }
-        )
     }
 
     private func status(_ ok: Bool) -> some View {
@@ -333,8 +332,48 @@ struct ReminderSettings: View {
     }
 }
 
+/// Lernmaterial über das Claude-Abo: was der tägliche Durchlauf automatisch erstellt.
+struct ClaudeSettingsSection: View {
+    @Environment(DataStore.self) private var store
+    @Environment(ClaudeBridge.self) private var claude
+
+    var body: some View {
+        @Bindable var store = store
+        Section {
+            Toggle("Neue Materialien automatisch aufbereiten", isOn: $store.prefs.claudeAuto)
+            if store.prefs.claudeAuto {
+                Toggle("Karteikarten", isOn: $store.prefs.claudeCards)
+                if store.prefs.claudeCards {
+                    Stepper("\(store.prefs.claudeCardsPerLecture) Karten pro Vorlesung und pro Übung",
+                            value: $store.prefs.claudeCardsPerLecture, in: 5...20)
+                }
+                Toggle("Zusammenfassungen", isOn: $store.prefs.claudeSummaries)
+                Toggle("Quizze", isOn: $store.prefs.claudeQuizzes)
+                Toggle("Probeklausuren aus Altklausuren", isOn: $store.prefs.claudeMockExams)
+                Toggle("Cheat Sheet je Modul", isOn: $store.prefs.claudeCheatSheets)
+                Toggle("„Das musst du können“ je Modul", isOn: $store.prefs.claudeMustKnow)
+                Stepper("Höchstens \(store.prefs.claudeBatchLimit) Pakete pro Durchlauf", value: $store.prefs.claudeBatchLimit, in: 5...100, step: 5)
+            }
+            Toggle("Probeklausuren & Cheat Sheets gründlicher (Sonnet)", isOn: $store.prefs.claudeBetterModel)
+            LabeledContent("Letzter Durchlauf") {
+                Text(claude.lastRun.map { "\(Fmt.dayShort($0)), \(Fmt.time($0))" } ?? "noch keiner")
+            }
+            if let s = claude.lastSummary { Text(s).font(.caption).foregroundStyle(.secondary) }
+            if !claude.pending.isEmpty {
+                LabeledContent("Offene Aufträge", value: "\(claude.pending.count)")
+            }
+        } header: {
+            Text("Claude – über dein Abo, ohne API-Kosten")
+        } footer: {
+            Text("Claude arbeitet täglich um 7 Uhr auf deinem Mac (die Claude-App muss geöffnet sein). Der Großteil läuft mit Haiku, damit dein Nutzungslimit geschont wird. Sofort starten: Claude-App → Geplante Aufgaben → „Kompass: Lernmaterial“ → Jetzt ausführen.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+}
+
 struct AISettings: View {
     @Environment(DataStore.self) private var store
+    @AppStorage(Secrets.deepSeekEnabledKey) private var deepSeekOn = false
     @State private var key = Secrets.deepSeekKey ?? ""
     @State private var testing = false
     @State private var status: String?
@@ -343,37 +382,50 @@ struct AISettings: View {
     var body: some View {
         @Bindable var store = store
         Form {
+            ClaudeSettingsSection()
             Section {
-                HStack {
-                    if reveal { TextField("API-Key", text: $key, prompt: Text("sk-…")) } else { SecureField("API-Key", text: $key, prompt: Text("sk-…")) }
-                    Button { reveal.toggle() } label: { Image(systemName: reveal ? "eye.slash" : "eye") }.buttonStyle(.borderless)
-                }
-                HStack {
-                    Link("Key auf platform.deepseek.com erstellen ↗", destination: URL(string: "https://platform.deepseek.com/api_keys")!)
-                    Spacer()
-                    if testing { ProgressView().controlSize(.small) }
-                    Button("Speichern & testen") { save() }.disabled(testing)
-                }
-                if let status { Text(status).font(.caption).foregroundStyle(.secondary) }
-            } header: { Text("DeepSeek") } footer: {
-                Text("Der Key liegt verschlüsselt im Schlüsselbund. Materialtexte werden nur für deine Anfragen an DeepSeek gesendet.")
+                Toggle("DeepSeek verwenden (Chat-Assistent, sofortiges Erstellen)", isOn: $deepSeekOn)
+            } footer: {
+                Text("Während der Entwicklung aus: Kompass greift dann nicht auf den Schlüsselbund zu und es entstehen keine API-Kosten.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            Section("Modell") {
-                Picker("Modell", selection: $store.prefs.aiModel) {
-                    Text("deepseek-chat (schnell, empfohlen)").tag("deepseek-chat")
-                    Text("deepseek-reasoner (denkt länger nach)").tag("deepseek-reasoner")
-                    if !["deepseek-chat", "deepseek-reasoner"].contains(store.prefs.aiModel) { Text(store.prefs.aiModel).tag(store.prefs.aiModel) }
+            if deepSeekOn {
+                Section {
+                    HStack {
+                        if reveal { TextField("API-Key", text: $key, prompt: Text("sk-…")) } else { SecureField("API-Key", text: $key, prompt: Text("sk-…")) }
+                        Button { reveal.toggle() } label: {
+                            Label(reveal ? "Key verbergen" : "Key anzeigen", systemImage: reveal ? "eye.slash" : "eye").labelStyle(.iconOnly)
+                        }
+                        .buttonStyle(.borderless)
+                        .help(reveal ? "Key verbergen" : "Key anzeigen")
+                    }
+                    HStack {
+                        Link("Key auf platform.deepseek.com erstellen ↗", destination: URL(string: "https://platform.deepseek.com/api_keys")!)
+                        Spacer()
+                        if testing { ProgressView().controlSize(.small) }
+                        Button("Speichern & testen") { save() }.disabled(testing)
+                    }
+                    if let status { Text(status).font(.caption).foregroundStyle(.secondary) }
+                } header: { Text("DeepSeek – sofort, kostet API-Guthaben") } footer: {
+                    Text("Für den Chat-Assistenten und sofortiges Erstellen. Der Key liegt verschlüsselt im Schlüsselbund; Materialtexte werden nur für deine Anfragen an DeepSeek gesendet.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
-                TextField("Eigener Modellname", text: $store.prefs.aiModel)
-                TextField("API-Adresse", text: $store.prefs.aiBaseURL)
-                LabeledContent("Kreativität") {
-                    HStack { Slider(value: $store.prefs.aiTemperature, in: 0...1.3, step: 0.1); Text(String(format: "%.1f", store.prefs.aiTemperature)).monospacedDigit().frame(width: 30) }
+                Section("Modell") {
+                    Picker("Modell", selection: $store.prefs.aiModel) {
+                        Text("deepseek-chat (schnell, empfohlen)").tag("deepseek-chat")
+                        Text("deepseek-reasoner (denkt länger nach)").tag("deepseek-reasoner")
+                        if !["deepseek-chat", "deepseek-reasoner"].contains(store.prefs.aiModel) { Text(store.prefs.aiModel).tag(store.prefs.aiModel) }
+                    }
+                    TextField("Eigener Modellname", text: $store.prefs.aiModel)
+                    TextField("API-Adresse", text: $store.prefs.aiBaseURL)
+                    LabeledContent("Kreativität") {
+                        HStack { Slider(value: $store.prefs.aiTemperature, in: 0...1.3, step: 0.1); Text(String(format: "%.1f", store.prefs.aiTemperature)).monospacedDigit().frame(width: 30) }
+                    }
                 }
-            }
-            Section("Sicherheit") {
-                Toggle("Vor Änderungen an fremden Kalendern nachfragen", isOn: $store.prefs.aiConfirmExternalEdits)
-                Text("Löschen fragt immer nach.").font(.caption).foregroundStyle(.secondary)
+                Section("Sicherheit") {
+                    Toggle("Vor Änderungen an fremden Kalendern nachfragen", isOn: $store.prefs.aiConfirmExternalEdits)
+                    Text("Löschen fragt immer nach.").font(.caption).foregroundStyle(.secondary)
+                }
             }
         }
         .formStyle(.grouped)
@@ -495,17 +547,19 @@ struct WorkBlockEditorRow: View {
     }
 
     private var weekday: some View {
-        Picker("", selection: $block.weekday) { ForEach(1...7, id: \.self) { Text(Fmt.weekday($0)).tag($0) } }.labelsHidden()
+        Picker("Wochentag", selection: $block.weekday) { ForEach(1...7, id: \.self) { Text(Fmt.weekday($0)).tag($0) } }.labelsHidden()
     }
     private var times: some View {
         HStack {
-            DatePicker("", selection: minutesBinding($block.startMinutes), displayedComponents: .hourAndMinute).labelsHidden()
-            Text("–")
-            DatePicker("", selection: minutesBinding($block.endMinutes), displayedComponents: .hourAndMinute).labelsHidden()
+            DatePicker("Beginn", selection: minutesBinding($block.startMinutes), displayedComponents: .hourAndMinute).labelsHidden()
+            Text("–").accessibilityHidden(true)
+            DatePicker("Ende", selection: minutesBinding($block.endMinutes), displayedComponents: .hourAndMinute).labelsHidden()
         }
     }
     private var deleteButton: some View {
-        Button(action: onDelete) { Image(systemName: "minus.circle.fill").foregroundStyle(.secondary) }
-            .buttonStyle(.borderless)
+        Button(action: onDelete) {
+            Label("Arbeitszeit entfernen", systemImage: "minus.circle.fill").labelStyle(.iconOnly).foregroundStyle(.secondary)
+        }
+        .buttonStyle(.borderless)
     }
 }

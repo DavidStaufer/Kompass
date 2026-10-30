@@ -1,7 +1,7 @@
 import Foundation
 
 enum GeneratorKind: String, CaseIterable, Identifiable {
-    case quiz, flashcards, summary, mockExam, studyPlan, topics
+    case quiz, flashcards, summary, mockExam, studyPlan, topics, cheatSheet, mustKnow
     var id: String { rawValue }
     var label: String {
         switch self {
@@ -11,6 +11,8 @@ enum GeneratorKind: String, CaseIterable, Identifiable {
         case .mockExam: return "Probeklausur"
         case .studyPlan: return "Lernplan"
         case .topics: return "Themen erkennen"
+        case .cheatSheet: return "Cheat Sheet"
+        case .mustKnow: return "Das musst du können"
         }
     }
     var symbol: String {
@@ -21,6 +23,8 @@ enum GeneratorKind: String, CaseIterable, Identifiable {
         case .mockExam: return "doc.badge.clock"
         case .studyPlan: return "list.bullet.clipboard"
         case .topics: return "list.bullet.indent"
+        case .cheatSheet: return "doc.plaintext"
+        case .mustKnow: return "target"
         }
     }
     var blurb: String {
@@ -31,6 +35,8 @@ enum GeneratorKind: String, CaseIterable, Identifiable {
         case .mockExam: return "Klausur im Stil deiner Altklausuren – mit Lösungen."
         case .studyPlan: return "Wochenplan bis zur Klausur, abgestimmt auf deine Schwächen."
         case .topics: return "Liest die Gliederung aus den Materialien und legt Themen an."
+        case .cheatSheet: return "Kompakter Spickzettel: Formeln, Definitionen, Merksätze zum schnellen Wiederholen."
+        case .mustKnow: return "Was in der Klausur sicher sitzen muss – mit typischen Aufgabentypen."
         }
     }
     /// Welche Materialarten standardmäßig ausgewählt sind.
@@ -38,6 +44,8 @@ enum GeneratorKind: String, CaseIterable, Identifiable {
         switch self {
         case .mockExam: return [.altklausur, .probeklausur, .uebung, .vorlesung, .skript]
         case .topics: return [.vorlesung, .skript]
+        case .mustKnow: return [.vorlesung, .skript, .altklausur, .probeklausur, .uebung]
+        case .cheatSheet: return [.vorlesung, .skript, .zusammenfassung, .uebung]
         default: return [.vorlesung, .skript, .uebung, .zusammenfassung, .notiz, .altklausur, .probeklausur]
         }
     }
@@ -179,6 +187,30 @@ enum StudyGenerator {
             let md = try await client.complete(system: tutor, user: user, temperature: 0.6, maxTokens: 8000, onUpdate: progress)
             let doc = StudyDoc(moduleID: module.id, kind: .probeklausur, title: "Probeklausur \(module.name) – \(Fmt.dayMonth(Date()))",
                                markdown: md, sourceMaterialIDs: materials.map(\.id))
+            store.docs.append(doc)
+            return ChatAttachment(kind: .doc, id: doc.id.uuidString, label: doc.title)
+
+        case .cheatSheet:
+            let user = """
+            Erstelle ein Cheat Sheet (Spickzettel) zum Modul „\(module.name)“ in Markdown – maximal so viel, wie auf zwei Seiten passt.\(focus)
+            Pro Thema eine ##-Überschrift; darunter nur das Wesentliche als knappe Stichpunkte: Definitionen, Formeln (mit Bedeutung der Variablen),
+            Sätze/Regeln, Merksätze, typische Fallen. Keine Fließtexte, keine Einleitung.
+            \(material)
+            """
+            let md = try await client.complete(system: tutor, user: user, temperature: 0.3, onUpdate: progress)
+            let doc = StudyDoc(moduleID: module.id, kind: .spickzettel, title: "Cheat Sheet \(module.name)", markdown: md, sourceMaterialIDs: materials.map(\.id))
+            store.docs.append(doc)
+            return ChatAttachment(kind: .doc, id: doc.id.uuidString, label: doc.title)
+
+        case .mustKnow:
+            let user = """
+            Erstelle für das Modul „\(module.name)“ in Markdown die Liste „Das musst du können“: was für die Klausur sicher sitzen muss.\(focus)
+            Aufbau: „## Unverzichtbar“ (die 5–10 wichtigsten Fähigkeiten/Inhalte, je ein Satz warum), „## Typische Aufgabentypen“
+            (aus Altklausuren/Übungen, mit kurzem Lösungsweg-Rezept), „## Häufige Fehler“, „## Selbsttest“ (8–12 kurze Fragen, ohne Lösungen).
+            \(material)
+            """
+            let md = try await client.complete(system: tutor, user: user, temperature: 0.3, onUpdate: progress)
+            let doc = StudyDoc(moduleID: module.id, kind: .pflichtwissen, title: "Das musst du können: \(module.name)", markdown: md, sourceMaterialIDs: materials.map(\.id))
             store.docs.append(doc)
             return ChatAttachment(kind: .doc, id: doc.id.uuidString, label: doc.title)
 
